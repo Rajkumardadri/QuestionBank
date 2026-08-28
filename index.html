@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuestionBank - Missed Questions & Practice Hub</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js for Reports -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- PDF.js for Client-Side PDF Parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <!-- Firebase Compat SDKs (Direct Browser Support) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .glass {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .card-flip {
+      perspective: 1000px;
+    }
+    .card-inner {
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+    .card-inner.flipped {
+      transform: rotateY(180deg);
+    }
+    .card-front, .card-back {
+      backface-visibility: hidden;
+    }
+    .card-back {
+      transform: rotateY(180deg);
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+
+  <!-- Navigation Bar -->
+  <header class="sticky top-0 z-50 glass border-b border-slate-800 px-4 lg:px-8 py-3 flex items-center justify-between">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+        <i class="fa-solid fa-brain text-white text-xl"></i>
+      </div>
+      <div>
+        <h1 class="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">QuestionBank Hub</h1>
+        <p class="text-xs text-slate-400">Sync • Practice • Auto Decks</p>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="hidden md:flex items-center space-x-1 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
+      <button onclick="switchTab('dashboard')" id="nav-dashboard" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-indigo-400 bg-indigo-950/60 border border-indigo-800/40">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Dashboard</span>
+      </button>
+      <button onclick="switchTab('practice')" id="nav-practice" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-circle-play"></i>
+        <span>MCQ Practice</span>
+      </button>
+      <button onclick="switchTab('pdf')" id="nav-pdf" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-file-pdf"></i>
+        <span>PDF Extractor</span>
+      </button>
+      <button onclick="switchTab('decks')" id="nav-decks" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-slate-400 hover:text-slate-200">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>Study Decks</span>
+      </button>
+    </nav>
+
+    <!-- Header Right Quick Actions -->
+    <div class="flex items-center space-x-3">
+      <button onclick="openConfigModal()" class="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition" title="Firebase Settings">
+        <i class="fa-solid fa-gear"></i>
+      </button>
+      <button onclick="switchTab('practice')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg shadow-indigo-600/30 flex items-center space-x-2 transition">
+        <i class="fa-solid fa-bolt"></i>
+        <span class="hidden sm:inline">Start Practice</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8">
+
+    <!-- 1. DASHBOARD & DAILY REPORT TAB -->
+    <section id="tab-dashboard" class="space-y-6">
+      <!-- Status Summary Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Total Questions -->
+        <div class="glass p-5 rounded-2xl border border-slate-800/80 space-y-2">
+          <div class="flex items-center justify-between text-slate-400">
+            <span class="text-xs uppercase font-semibold tracking-wider">Total Questions</span>
+            <i class="fa-solid fa-database text-indigo-400"></i>
+          </div>
+          <div class="text-3xl font-extrabold text-white" id="stat-total">0</div>
+          <p class="text-xs text-slate-400">Saved in Firebase</p>
+        </div>
+        <!-- Pending Practice -->
+        <div class="glass p-5 rounded-2xl border border-amber-500/20 bg-amber-950/10 space-y-2">
+          <div class="flex items-center justify-between text-amber-400">
+            <span class="text-xs uppercase font-semibold tracking-wider">Pending MCQ</span>
+            <i class="fa-solid fa-clock text-amber-400"></i>
+          </div>
+          <div class="text-3xl font-extrabold text-amber-300" id="stat-pending">0</div>
+          <p class="text-xs text-amber-400/80">Needs to be attempted</p>
+        </div>
+        <!-- Solved Questions -->
+        <div class="glass p-5 rounded-2xl border border-emerald-500/20 bg-emerald-950/10 space-y-2">
+          <div class="flex items-center justify-between text-emerald-400">
+            <span class="text-xs uppercase font-semibold tracking-wider">Solved / Mastered</span>
+            <i class="fa-solid fa-circle-check text-emerald-400"></i>
+          </div>
+          <div class="text-3xl font-extrabold text-emerald-300" id="stat-solved">0</div>
+          <p class="text-xs text-emerald-400/80">Answered correctly</p>
+        </div>
+        <!-- Needs Revision -->
+        <div class="glass p-5 rounded-2xl border border-rose-500/20 bg-rose-950/10 space-y-2">
+          <div class="flex items-center justify-between text-rose-400">
+            <span class="text-xs uppercase font-semibold tracking-wider">Needs More Study</span>
+            <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+          </div>
+          <div class="text-3xl font-extrabold text-rose-300" id="stat-revision">0</div>
+          <p class="text-xs text-rose-400/80">Marked for revision</p>
+        </div>
+      </div>
+
+      <!-- Main Analytics & Daily Progress Report Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Analytics Chart -->
+        <div class="lg:col-span-2 glass p-6 rounded-2xl border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="font-bold text-lg text-slate-100 flex items-center space-x-2">
+              <i class="fa-solid fa-chart-line text-indigo-400"></i>
+              <span>Daily Practice & Accuracy Report</span>
+            </h2>
+            <span class="text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">Auto-Generated</span>
+          </div>
+          <div class="h-64">
+            <canvas id="dailyReportChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Today's Report & Quick Actions -->
+        <div class="glass p-6 rounded-2xl border border-slate-800 space-y-4 flex flex-col justify-between">
+          <div>
+            <h2 class="font-bold text-lg text-slate-100 flex items-center space-x-2 mb-4">
+              <i class="fa-solid fa-calendar-day text-violet-400"></i>
+              <span>Today's Report Summary</span>
+            </h2>
+
+            <div class="space-y-3">
+              <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                <span class="text-sm text-slate-300">Questions Attempted</span>
+                <span class="font-bold text-indigo-400 text-lg" id="today-attempted">0</span>
+              </div>
+              <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                <span class="text-sm text-slate-300">Correct Answers</span>
+                <span class="font-bold text-emerald-400 text-lg" id="today-correct">0</span>
+              </div>
+              <div class="flex justify-between items-center bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                <span class="text-sm text-slate-300">Wrong / Re-study</span>
+                <span class="font-bold text-rose-400 text-lg" id="today-wrong">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-2 mt-4 pt-4 border-t border-slate-800">
+            <button onclick="switchTab('practice')" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold flex items-center justify-center space-x-2 transition shadow-lg shadow-indigo-600/30">
+              <i class="fa-solid fa-play"></i>
+              <span>Attempt Pending Questions</span>
+            </button>
+            <button onclick="switchTab('pdf')" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl font-medium border border-slate-700 flex items-center justify-center space-x-2 transition">
+              <i class="fa-solid fa-plus"></i>
+              <span>Add Questions from PDF</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Questions List -->
+      <div class="glass p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between">
+          <h2 class="font-bold text-lg text-slate-100 flex items-center space-x-2">
+            <i class="fa-solid fa-list-check text-indigo-400"></i>
+            <span>Recently Added Missed Questions</span>
+          </h2>
+          <button onclick="renderQuestionsTable()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh List</button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm text-slate-300">
+            <thead class="bg-slate-900/80 text-xs text-slate-400 uppercase border-b border-slate-800">
+              <tr>
+                <th class="p-3">Question</th>
+                <th class="p-3">Subject</th>
+                <th class="p-3">Source</th>
+                <th class="p-3">Status</th>
+                <th class="p-3">Action</th>
+              </tr>
+            </thead>
+            <tbody id="recent-questions-tbody" class="divide-y divide-slate-800/60">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. MCQ PRACTICE TAB -->
+    <section id="tab-practice" class="hidden space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-4 rounded-2xl border border-slate-800">
+        <div>
+          <h2 class="font-bold text-xl text-white">MCQ Practice Arena</h2>
+          <p class="text-xs text-slate-400">Solve pending & wrong questions with instant feedback and explanations</p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="flex items-center space-x-3">
+          <select id="practice-filter-status" onchange="loadPracticeQuestions()" class="bg-slate-900 border border-slate-700 text-xs rounded-xl p-2.5 text-slate-200">
+            <option value="pending">Show: Pending Questions</option>
+            <option value="needs_revision">Show: Needs Revision</option>
+            <option value="all">Show: All Questions</option>
+          </select>
+          <select id="practice-filter-source" onchange="loadPracticeQuestions()" class="bg-slate-900 border border-slate-700 text-xs rounded-xl p-2.5 text-slate-200">
+            <option value="all">All Sources</option>
+            <option value="testbook">Testbook Scraped</option>
+            <option value="pdf">PDF Upload</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Question Practice Container -->
+      <div id="quiz-card-container" class="max-w-3xl mx-auto">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- 3. PDF EXTRACTOR TAB -->
+    <section id="tab-pdf" class="hidden space-y-6">
+      <div class="glass p-6 rounded-2xl border border-slate-800 space-y-4">
+        <h2 class="font-bold text-xl text-white flex items-center space-x-2">
+          <i class="fa-solid fa-file-pdf text-rose-500"></i>
+          <span>PDF Question Parser</span>
+        </h2>
+        <p class="text-sm text-slate-400">Upload any PDF test paper or paste raw question text. Our parser will extract MCQs, options, and answers, allowing you to preview and sync them to Firebase in 1-click.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+          <!-- Dropzone for PDF -->
+          <div class="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-8 text-center space-y-4 transition flex flex-col justify-center items-center bg-slate-900/40">
+            <i class="fa-solid fa-cloud-arrow-up text-4xl text-indigo-400"></i>
+            <div>
+              <p class="font-semibold text-slate-200">Upload PDF Test Paper</p>
+              <p class="text-xs text-slate-400 mt-1">Select PDF file from your computer</p>
+            </div>
+            <input type="file" id="pdf-file-input" accept="application/pdf" class="hidden" onchange="handlePdfUpload(event)">
+            <button onclick="document.getElementById('pdf-file-input').click()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition">
+              Choose PDF File
+            </button>
+            <p id="pdf-status" class="text-xs text-indigo-300 font-mono"></p>
+          </div>
+
+          <!-- Paste Raw Text Option -->
+          <div class="space-y-3">
+            <label class="text-sm font-semibold text-slate-200">Or Paste Question Text / Notes</label>
+            <textarea id="raw-text-input" rows="7" placeholder="Q1. What is the SI unit of Force?&#10;A) Joule&#10;B) Newton&#10;C) Watt&#10;D) Pascal&#10;Answer: B" class="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+            <button onclick="parseRawText()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2.5 rounded-xl font-medium text-sm border border-slate-700 transition flex items-center justify-center space-x-2">
+              <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+              <span>Parse Text into MCQs</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Preview Extracted Questions -->
+      <div id="pdf-parsed-preview" class="hidden glass p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-lg text-white">Parsed Questions Preview (<span id="parsed-count">0</span>)</h3>
+          <button onclick="saveAllParsedQuestions()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/30 transition flex items-center space-x-2">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Save All to Firebase</span>
+          </button>
+        </div>
+        <div id="parsed-questions-list" class="space-y-4"></div>
+      </div>
+    </section>
+
+    <!-- 4. STUDY DECKS & NOTES TAB -->
+    <section id="tab-decks" class="hidden space-y-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-6 rounded-2xl border border-slate-800">
+        <div>
+          <h2 class="font-bold text-xl text-white flex items-center space-x-2">
+            <i class="fa-solid fa-brain text-violet-400"></i>
+            <span>Smart Revision Decks & Notes Flashcards</span>
+          </h2>
+          <p class="text-xs text-slate-400">Designed automatically from your study notes & missed questions for active recall</p>
+        </div>
+        <button onclick="openCreateDeckModal()" class="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2.5 rounded-xl font-semibold text-sm transition shadow-lg shadow-violet-600/30 flex items-center space-x-2">
+          <i class="fa-solid fa-plus"></i>
+          <span>Create Deck from Notes</span>
+        </button>
+      </div>
+
+      <!-- Decks Grid -->
+      <div id="decks-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Rendered via JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Firebase Config Modal -->
+  <div id="modal-config" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="glass max-w-md w-full p-6 rounded-2xl border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="font-bold text-lg text-white">Firebase Project Settings</h3>
+        <button onclick="closeConfigModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <p class="text-xs text-slate-400">Connect your Firebase Firestore database. If left blank, QuestionBank will run in local storage mode.</p>
+      
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 mb-1">Firebase Project ID</label>
+          <input type="text" id="cfg-project-id" placeholder="e.g. my-questionbank-app" class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-200">
+        </div>
+        <div>
+          <label class="block text-slate-300 mb-1">Firebase API Key</label>
+          <input type="text" id="cfg-api-key" placeholder="AIzaSy..." class="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-200">
+        </div>
+      </div>
+
+      <div class="flex space-x-3 pt-2">
+        <button onclick="saveConfigFromModal()" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-sm transition">Save Config</button>
+        <button onclick="closeConfigModal()" class="py-2.5 px-4 bg-slate-800 text-slate-300 rounded-xl text-sm hover:bg-slate-700">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loaded as standard browser scripts (No CORS file:// module issues) -->
+  <script src="./firebase-config.js"></script>
+  <script src="./pdf-parser.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
