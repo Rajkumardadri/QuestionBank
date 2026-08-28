@@ -213,7 +213,12 @@
             <i class="fa-solid fa-list-check text-indigo-400"></i>
             <span>Recently Added Missed Questions</span>
           </h2>
-          <button onclick="renderQuestionsTable()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh List</button>
+          <div class="flex items-center space-x-3">
+            <button onclick="renderQuestionsTable()" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh List</button>
+            <button onclick="clearAllQuestions()" class="text-xs text-rose-400 hover:text-rose-300 font-semibold border border-rose-500/30 bg-rose-950/20 px-2.5 py-1 rounded-lg">
+              <i class="fa-solid fa-trash-can mr-1"></i> Clear All
+            </button>
+          </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -363,7 +368,6 @@
     </div>
   </div>
 
-  <!-- Loaded as standard browser scripts (No CORS file:// module issues) -->
   <script src="./firebase-config.js"></script>
   <script src="./pdf-parser.js"></script>
   <script src="./app.js"></script>

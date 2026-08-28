@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadDashboardData();
   initDailyChart();
 
-  // Expose handlers to global window for onclick attributes
   window.switchTab = switchTab;
   window.openConfigModal = openConfigModal;
   window.closeConfigModal = closeConfigModal;
@@ -24,6 +23,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.renderQuestionsTable = renderQuestionsTable;
   window.openCreateDeckModal = openCreateDeckModal;
   window.flipDeckCard = flipDeckCard;
+  window.deleteQuestion = deleteQuestion;
+  window.clearAllQuestions = clearAllQuestions;
 });
 
 async function loadDashboardData() {
@@ -78,11 +79,11 @@ function renderQuestionsTable() {
   if (!tbody) return;
 
   if (currentQuestionsList.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No questions added yet. Scrape from Testbook or upload PDF!</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400">No questions in database. Sync from Testbook or upload PDF!</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = currentQuestionsList.slice(0, 10).map(q => {
+  tbody.innerHTML = currentQuestionsList.map(q => {
     let statusBadge = `<span class="bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold">Pending</span>`;
     if (q.status === 'solved') {
       statusBadge = `<span class="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-xs font-semibold">Solved</span>`;
@@ -96,12 +97,29 @@ function renderQuestionsTable() {
         <td class="p-3 text-slate-400 text-xs">${escapeHtml(q.subject || 'General')}</td>
         <td class="p-3 text-xs"><span class="bg-slate-800 text-indigo-300 px-2 py-0.5 rounded-md border border-slate-700 uppercase font-mono">${q.source}</span></td>
         <td class="p-3">${statusBadge}</td>
-        <td class="p-3">
-          <button onclick="switchTab('practice')" class="text-xs bg-indigo-600/80 hover:bg-indigo-600 text-white px-3 py-1 rounded-lg transition">Attempt</button>
+        <td class="p-3 flex items-center space-x-2">
+          <button onclick="switchTab('practice')" class="text-xs bg-indigo-600/80 hover:bg-indigo-600 text-white px-3 py-1.5 rounded-lg transition font-medium">Attempt</button>
+          <button onclick="deleteQuestion('${q.id}')" class="text-xs bg-rose-600/20 hover:bg-rose-600 text-rose-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-rose-500/30 transition" title="Delete Question">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
         </td>
       </tr>
     `;
   }).join('');
+}
+
+async function deleteQuestion(qId) {
+  if (confirm("Are you sure you want to delete this question?")) {
+    await QB.deleteQuestion(qId);
+    await loadDashboardData();
+  }
+}
+
+async function clearAllQuestions() {
+  if (confirm("Are you sure you want to clear ALL questions from the database? This cannot be undone.")) {
+    await QB.clearAllQuestions();
+    await loadDashboardData();
+  }
 }
 
 function loadPracticeQuestions() {
@@ -149,7 +167,12 @@ function loadPracticeQuestions() {
           <span class="text-xs font-semibold text-slate-400 bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
             Question ${idx + 1} of ${filtered.length} • <span class="text-indigo-400 uppercase">${q.subject || 'General'}</span>
           </span>
-          <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-md font-mono">${q.source}</span>
+          <div class="flex items-center space-x-2">
+            <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-md font-mono">${q.source}</span>
+            <button onclick="deleteQuestion('${q.id}')" class="text-xs text-rose-400 hover:text-rose-300 p-1" title="Delete Question">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
         </div>
 
         <h3 class="text-base font-semibold text-white leading-relaxed">${escapeHtml(q.questionText)}</h3>
