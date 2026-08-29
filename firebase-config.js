@@ -1,4 +1,4 @@
-// QuestionBank Firebase & Storage Integration Module
+// QuestionBank Firebase & Storage Integration Module with 30-Day Recycle Bin System
 window.QB = window.QB || {};
 
 const DEFAULT_CONFIG = {
@@ -46,26 +46,55 @@ QB.initFirebaseInstance = function() {
   }
 };
 
-QB.fetchQuestions = async function() {
+// Fetch Questions (includeDeleted = false hides soft-deleted items)
+QB.fetchQuestions = async function(includeDeleted = false) {
+  let allQuestions = [];
+
   if (QB.db) {
     try {
       const snapshot = await QB.db.collection("questions").orderBy("createdAt", "desc").get();
-      const list = [];
       snapshot.forEach(doc => {
-        list.push({ id: doc.id, ...doc.data() });
+        allQuestions.push({ id: doc.id, ...doc.data() });
       });
-      if (list.length > 0) return list;
     } catch (err) {
       console.warn("Firestore fetch error, reading local backup:", err);
+      allQuestions = getLocalQuestions();
     }
+  } else {
+    allQuestions = getLocalQuestions();
   }
 
+  // Auto-purge items that have been in Recycle Bin for > 30 days
+  autoPurgeExpiredQuestions(allQuestions);
+
+  if (includeDeleted) {
+    return allQuestions.filter(q => q.deleted === true);
+  } else {
+    return allQuestions.filter(q => !q.deleted);
+  }
+};
+
+function getLocalQuestions() {
   const local = localStorage.getItem("qb_local_questions");
   if (local) {
     try { return JSON.parse(local); } catch(e){}
   }
   return QB.getMockQuestions();
-};
+}
+
+function saveLocalQuestions(questions) {
+  localStorage.setItem("qb_local_questions", JSON.stringify(questions));
+}
+
+// 30-Day Auto Purge Engine
+async function autoPurgeExpiredQuestions(questionsList) {
+  const now = Date.now();
+  const expired = questionsList.filter(q => q.deleted && q.expiresAt && now > q.expiresAt);
+
+  for (const q of expired) {
+    await QB.permanentDeleteQuestion(q.id);
+  }
+}
 
 QB.saveQuestion = async function(questionData) {
   const qObj = {
@@ -77,11 +106,23 @@ QB.saveQuestion = async function(questionData) {
     explanation: questionData.explanation || "No explanation provided.",
     source: questionData.source || "manual",
     status: questionData.status || "pending",
-    subject: questionData.subject || "General",
+    subject: questionData.subject || "General Subject",
+    topic: questionData.topic || questionData.subject || "General Topic",
+    subfolder: questionData.subfolder || "General Subfolder",
     tags: questionData.tags || [],
     createdAt: questionData.createdAt || new Date().toISOString(),
     lastAttemptedAt: questionData.lastAttemptedAt || null,
-    userSelectedOption: questionData.userSelectedOption ?? null
+    attemptCount: questionData.attemptCount || 0,
+    wrongAttemptsCount: questionData.wrongAttemptsCount || 0,
+    userSelectedOption: questionData.userSelectedOption ?? null,
+    // Spaced Repetition (SRS SM-2) Memory Engine Fields
+    srsInterval: questionData.srsInterval || 1,
+    srsRepetition: questionData.srsRepetition || 0,
+    srsEaseFactor: questionData.srsEaseFactor || 2.5,
+    nextReviewDate: questionData.nextReviewDate || new Date().toISOString(),
+    deleted: questionData.deleted || false,
+    deletedAt: questionData.deletedAt || null,
+    expiresAt: questionData.expiresAt || null
   };
 
   if (QB.db) {
@@ -92,58 +133,141 @@ QB.saveQuestion = async function(questionData) {
     }
   }
 
-  const questions = await QB.fetchQuestions();
+  const questions = getLocalQuestions();
   const idx = questions.findIndex(q => q.id === qObj.id);
   if (idx >= 0) questions[idx] = qObj;
   else questions.unshift(qObj);
-  localStorage.setItem("qb_local_questions", JSON.stringify(questions));
+  saveLocalQuestions(questions);
 
   return qObj;
 };
 
-// Delete single question from Firestore & LocalStorage
+// Soft Delete (Moves to Recycle Bin for 30 Days)
 QB.deleteQuestion = async function(questionId) {
+  const now = Date.now();
+  const deletedAtIso = new Date().toISOString();
+  const expiresAtMs = now + (30 * 24 * 60 * 60 * 1000); // 30 Days in milliseconds
+
+  if (QB.db) {
+    try {
+      await QB.db.collection("questions").doc(questionId).update({
+        deleted: true,
+        deletedAt: deletedAtIso,
+        expiresAt: expiresAtMs
+      });
+    } catch (err) {
+      console.warn("Firestore soft delete error:", err);
+    }
+  }
+
+  const questions = getLocalQuestions();
+  const q = questions.find(item => item.id === questionId);
+  if (q) {
+    q.deleted = true;
+    q.deletedAt = deletedAtIso;
+    q.expiresAt = expiresAtMs;
+    saveLocalQuestions(questions);
+  }
+};
+
+// Restore Question from Recycle Bin
+QB.restoreQuestion = async function(questionId) {
+  if (QB.db) {
+    try {
+      await QB.db.collection("questions").doc(questionId).update({
+        deleted: false,
+        deletedAt: null,
+        expiresAt: null
+      });
+    } catch (err) {
+      console.warn("Firestore restore error:", err);
+    }
+  }
+
+  const questions = getLocalQuestions();
+  const q = questions.find(item => item.id === questionId);
+  if (q) {
+    q.deleted = false;
+    q.deletedAt = null;
+    q.expiresAt = null;
+    saveLocalQuestions(questions);
+  }
+};
+
+// Permanent Hard Delete (Erases forever)
+QB.permanentDeleteQuestion = async function(questionId) {
   if (QB.db) {
     try {
       await QB.db.collection("questions").doc(questionId).delete();
     } catch (err) {
-      console.warn("Firestore delete error:", err);
+      console.warn("Firestore hard delete error:", err);
     }
   }
 
-  const local = localStorage.getItem("qb_local_questions");
-  if (local) {
-    try {
-      let list = JSON.parse(local);
-      list = list.filter(q => q.id !== questionId);
-      localStorage.setItem("qb_local_questions", JSON.stringify(list));
-    } catch (e) {}
-  }
+  let questions = getLocalQuestions();
+  questions = questions.filter(q => q.id !== questionId);
+  saveLocalQuestions(questions);
 };
 
-// Clear All Questions
+// Soft Delete All Questions (Moves all to Recycle Bin)
 QB.clearAllQuestions = async function() {
-  if (QB.db) {
-    try {
-      const snapshot = await QB.db.collection("questions").get();
-      const batch = QB.db.batch();
-      snapshot.forEach(doc => {
-        batch.delete(doc.ref);
-      });
-      await batch.commit();
-    } catch (err) {
-      console.warn("Firestore clear batch error:", err);
-    }
+  const activeQuestions = await QB.fetchQuestions(false);
+  for (const q of activeQuestions) {
+    await QB.deleteQuestion(q.id);
   }
-  localStorage.removeItem("qb_local_questions");
 };
 
+// Restore All Soft-Deleted Questions
+QB.restoreAllDeletedQuestions = async function() {
+  const deletedQuestions = await QB.fetchQuestions(true);
+  for (const q of deletedQuestions) {
+    await QB.restoreQuestion(q.id);
+  }
+};
+
+// Permanent Clear Recycle Bin (Empty Trash)
+QB.emptyRecycleBin = async function() {
+  const deletedQuestions = await QB.fetchQuestions(true);
+  for (const q of deletedQuestions) {
+    await QB.permanentDeleteQuestion(q.id);
+  }
+};
+
+// Update Question Status with Spaced Repetition (SRS SM-2) Memory Calculation
 QB.updateQuestionStatus = async function(questionId, newStatus, selectedIdx = null) {
-  const questions = await QB.fetchQuestions();
+  const questions = await QB.fetchQuestions(false);
   const q = questions.find(item => item.id === questionId);
   if (q) {
     q.status = newStatus;
     q.lastAttemptedAt = new Date().toISOString();
+    q.attemptCount = (q.attemptCount || 0) + 1;
+    
+    // Spaced Repetition (SM-2) Interval Calculation
+    let rep = q.srsRepetition || 0;
+    let interval = q.srsInterval || 1;
+    let ease = q.srsEaseFactor || 2.5;
+
+    if (newStatus === "solved") {
+      rep += 1;
+      if (rep === 1) interval = 1;
+      else if (rep === 2) interval = 3;
+      else interval = Math.round(interval * ease);
+      ease = Math.min(3.0, ease + 0.1);
+    } else { // needs_revision or wrong attempt
+      q.wrongAttemptsCount = (q.wrongAttemptsCount || 0) + 1;
+      rep = 0;
+      interval = 1; // Due tomorrow
+      ease = Math.max(1.3, ease - 0.2);
+    }
+
+    q.srsRepetition = rep;
+    q.srsInterval = interval;
+    q.srsEaseFactor = ease;
+
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + interval);
+    q.nextReviewDate = nextDate.toISOString();
+
     if (selectedIdx !== null) q.userSelectedOption = selectedIdx;
     await QB.saveQuestion(q);
     QB.recordDailyAttempt(newStatus === "solved");
@@ -181,11 +305,12 @@ QB.getDecks = function() {
   return [
     {
       id: "deck_1",
-      title: "High Yield Quantitative Formulas",
-      subject: "Mathematics",
+      title: "Fluid Mechanics Properties & Formulas",
+      subject: "Mechanical Engineering",
+      topic: "Fluid Mechanics",
       cards: [
-        { front: "Speed, Distance & Time Formula", back: "Speed = Distance / Time. Relative Speed (Opposite Direction) = S1 + S2." },
-        { front: "Compound Interest (2 Years Diff)", back: "Difference between CI & SI for 2 years = Principal * (Rate / 100)^2." }
+        { front: "Kinematic Viscosity Formula & SI Unit", back: "ν = μ / ρ (Unit: m²/s or Stokes. 1 Stokes = 10⁻⁴ m²/s)." },
+        { front: "Newton's Law of Viscosity", back: "Shear Stress τ = μ (du/dy)." }
       ]
     }
   ];
@@ -197,6 +322,46 @@ QB.saveDeck = function(deck) {
   if (idx >= 0) decks[idx] = deck;
   else decks.unshift(deck);
   localStorage.setItem("qb_local_decks", JSON.stringify(decks));
+};
+
+QB.deleteDeck = function(deckId) {
+  let decks = QB.getDecks();
+  decks = decks.filter(d => d.id !== deckId);
+  localStorage.setItem("qb_local_decks", JSON.stringify(decks));
+};
+
+QB.isSRSQuestionDue = function(q) {
+  if (!q) return false;
+  if (!q.nextReviewDate) return true;
+  return new Date(q.nextReviewDate) <= new Date();
+};
+
+QB.getSRSForecast = function(questionsList) {
+  const now = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const in7Days = new Date();
+  in7Days.setDate(in7Days.getDate() + 7);
+
+  let dueToday = 0;
+  let dueTomorrow = 0;
+  let dueThisWeek = 0;
+  let retainedMastered = 0;
+
+  questionsList.forEach(q => {
+    if (!q.nextReviewDate) {
+      dueToday++;
+      return;
+    }
+    const d = new Date(q.nextReviewDate);
+    if (d <= now) dueToday++;
+    else if (d <= tomorrow) dueTomorrow++;
+    else if (d <= in7Days) dueThisWeek++;
+    else retainedMastered++;
+  });
+
+  return { dueToday, dueTomorrow, dueThisWeek, retainedMastered };
 };
 
 QB.getMockQuestions = function() {
