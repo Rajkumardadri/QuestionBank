@@ -80,6 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.attemptQuestion = attemptQuestion;
   window.attemptHourlySpotlightQuestion = attemptHourlySpotlightQuestion;
   window.toggleSolutionVisibility = toggleSolutionVisibility;
+  window.generateGeminiHinglishSolution = generateGeminiHinglishSolution;
   window.updateQuestionStatus = updateQuestionStatus;
   window.toggleMarkForReview = toggleMarkForReview;
   window.renderQuestionsTable = renderQuestionsTable;
@@ -109,6 +110,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.dismissAlertBanner = dismissAlertBanner;
   window.renderSRSMemorySchedule = renderSRSMemorySchedule;
   window.startSRSPracticeSession = startSRSPracticeSession;
+
+  // CUSTOM TIMED MOCK TEST EXPORTS
+  window.openTestSetupModal = openTestSetupModal;
+  window.closeTestSetupModal = closeTestSetupModal;
+  window.onTestSubjectChange = onTestSubjectChange;
+  window.setTestQuestionCount = setTestQuestionCount;
+  window.setTestDuration = setTestDuration;
+  window.updateTestTimerHint = updateTestTimerHint;
+  window.startMockTest = startMockTest;
+  window.submitMockTest = submitMockTest;
+  window.closeTestScorecard = closeTestScorecard;
 
   // TOPICS MANAGER WINDOW EXPORTS
   window.renderTopicsManager = renderTopicsManager;
@@ -2117,10 +2129,19 @@ function loadPracticeQuestions() {
           </div>
 
           <div id="explanation-box-${q.id}" class="hidden p-5 rounded-2xl bg-slate-100 dark:bg-zinc-900 border border-indigo-500/40 space-y-3 shadow-xl transition-all duration-300">
-            <div class="flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 font-extrabold text-sm">
-              <i class="fa-solid fa-lightbulb text-amber-500"></i>
-              <span>Testbook Detailed Solution & Concept Note</span>
+            <div class="flex items-center justify-between text-indigo-600 dark:text-indigo-400 font-extrabold text-sm">
+              <span class="flex items-center space-x-2">
+                <i class="fa-solid fa-lightbulb text-amber-500"></i>
+                <span>Detailed Solution & Concept Note</span>
+              </span>
+              <button onclick="generateGeminiHinglishSolution('${q.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shadow-md">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                <span>✨ Generate Hinglish AI Solution</span>
+              </button>
             </div>
+
+            <div id="ai-gemini-sol-container-${q.id}"></div>
+
             <div class="text-xs text-slate-900 dark:text-white font-bold leading-relaxed font-mono whitespace-pre-wrap bg-white dark:bg-black p-4 rounded-xl border border-slate-200 dark:border-zinc-800">${cleanSol}</div>
 
             <div class="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
@@ -2223,6 +2244,190 @@ function toggleSolutionVisibility(qId) {
   }
 }
 
+function formatCleanStepByStepSolution(rawSol) {
+  if (!rawSol) return "";
+
+  let cleanText = rawSol
+    .replace(/Re-attempt answer[\s\S]*?AnswersSolution/gi, '')
+    .replace(/Re-attempt mode:[\s\S]*?see the answer now/gi, '')
+    .replace(/Your First Attempt Answers/gi, '')
+    .replace(/Hide Solution Click here to see the answer now/gi, '')
+    .replace(/123456789\.0\+\/-/gi, '')
+    .trim();
+
+  cleanText = formatSubSupScripts(cleanText);
+
+  const rawLines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+  let formattedSteps = [];
+  let stepCounter = 1;
+
+  rawLines.forEach(line => {
+    if (line.includes("Re-attempt") || line.includes("Click here to see")) return;
+
+    let text = line;
+    let isHeading = false;
+    let headingTitle = "";
+
+    if (/^(Given:|Given Values:)/i.test(text)) {
+      headingTitle = "Start with the given equation / values:";
+      text = text.replace(/^(Given:|Given Values:)/i, '').trim();
+      isHeading = true;
+    } else if (/^(Formula Used:|Main Formula:)/i.test(text)) {
+      headingTitle = "Apply algebraic identity / formula:";
+      text = text.replace(/^(Formula Used:|Main Formula:)/i, '').trim();
+      isHeading = true;
+    } else if (/^(Calculation:|Step-by-Step Derivation:)/i.test(text)) {
+      headingTitle = "Simplify and solve step-by-step:";
+      text = text.replace(/^(Calculation:|Step-by-Step Derivation:)/i, '').trim();
+      isHeading = true;
+    } else if (/^Shortcut Trick/i.test(text)) {
+      headingTitle = "🔥 Quick Shortcut Method:";
+      text = text.replace(/^Shortcut Trick/i, '').trim();
+      isHeading = true;
+    } else if (/^Alternate Method/i.test(text)) {
+      headingTitle = "💡 Alternate Method:";
+      text = text.replace(/^Alternate Method/i, '').trim();
+      isHeading = true;
+    }
+
+    if (isHeading) {
+      formattedSteps.push(`
+        <div class="mt-4 mb-2 font-extrabold text-sm text-slate-900 dark:text-white flex items-center space-x-2.5">
+          <span class="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 shadow-md shadow-indigo-600/30">${stepCounter++}</span>
+          <span>${escapeHtml(headingTitle)}</span>
+        </div>
+      `);
+    }
+
+    if (!text) return;
+
+    const isEquation = text.includes("=") || text.includes("⇒") || text.includes("∴") || text.includes("x²") || text.includes("1/x");
+
+    if (isEquation && !text.toLowerCase().includes("the correct answer")) {
+      formattedSteps.push(`
+        <div class="my-2.5 p-3.5 bg-slate-100 dark:bg-zinc-950 rounded-xl border border-slate-200 dark:border-zinc-800 text-center font-mono text-sm sm:text-base font-black text-indigo-600 dark:text-indigo-400 shadow-inner tracking-wide leading-relaxed">
+          ${text}
+        </div>
+      `);
+    } else if (text.toLowerCase().includes("the correct answer")) {
+      formattedSteps.push(`
+        <div class="mt-3 p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center space-x-2">
+          <i class="fa-solid fa-circle-check"></i>
+          <span>${text}</span>
+        </div>
+      `);
+    } else {
+      formattedSteps.push(`
+        <div class="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed py-1">
+          ${text}
+        </div>
+      `);
+    }
+  });
+
+  return formattedSteps.join("");
+}
+
+function generateSmartHinglishFallback(q) {
+  const correctOptLetter = String.fromCharCode(65 + (q.correctAnswerIndex || 0));
+  const correctOptText = q.options && q.options[q.correctAnswerIndex] ? q.options[q.correctAnswerIndex] : "";
+  const rawSol = cleanExplanationDisplay(q.explanation || "");
+
+  const cleanStepsContent = formatCleanStepByStepSolution(rawSol);
+
+  return `
+    <div class="p-5 sm:p-6 bg-white dark:bg-zinc-900 border border-indigo-500/30 rounded-2xl space-y-4 text-left shadow-2xl my-3">
+      <div class="flex items-center justify-between text-slate-900 dark:text-white border-b border-slate-200 dark:border-zinc-800 pb-3">
+        <h3 class="font-black text-base flex items-center space-x-2">
+          <i class="fa-solid fa-calculator text-indigo-500"></i>
+          <span>Step-by-Step Solution</span>
+        </h3>
+        <span class="bg-indigo-600 text-white font-mono text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">Concept Notes</span>
+      </div>
+
+      <div class="space-y-1">
+        ${cleanStepsContent}
+      </div>
+
+      <div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl font-black text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+        <span>✅ Correct Answer: Option (${correctOptLetter}) ${escapeHtml(correctOptText)}</span>
+        <span class="text-[10px] bg-emerald-600 text-white px-2.5 py-0.5 rounded-full uppercase font-extrabold">Verified</span>
+      </div>
+    </div>
+  `;
+}
+
+async function generateGeminiHinglishSolution(qId) {
+  const box = document.getElementById(`ai-gemini-sol-container-${qId}`);
+  if (!box) return;
+
+  const firebaseCfg = QB.getFirebaseConfig();
+  let userGeminiKey = (localStorage.getItem("qb_gemini_api_key") || "").trim();
+
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  box.innerHTML = `
+    <div class="p-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 font-bold flex items-center space-x-2 my-2">
+      <i class="fa-solid fa-spinner animate-spin text-base text-indigo-500"></i>
+      <span>Generating Hinglish step-by-step solution...</span>
+    </div>
+  `;
+
+  const promptText = `Analyze this multiple choice question and provide a crystal-clear, step-by-step explanation in simple, student-friendly Hinglish.
+
+Question Statement: ${q.questionText}
+Options: ${q.options ? q.options.join(", ") : ""}
+Correct Answer: Option ${String.fromCharCode(65 + (q.correctAnswerIndex || 0))}
+
+Instructions:
+1. Explain the core concept in simple Hinglish (e.g. "Is question me hume...").
+2. Provide step-by-step mathematical/logical derivations with bold formulas.
+3. Keep line breaks clean.
+4. Conclude why the correct option is right.`;
+
+  const keysToTry = [userGeminiKey, firebaseCfg.apiKey, "AIzaSyCw_eug46aDoSnluYLqFJE7ub89105s6k0"].filter(Boolean);
+  const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+  let rawAiText = null;
+
+  for (const apiKey of keysToTry) {
+    for (const modelName of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
+        });
+
+        const data = await res.json();
+        if (data.error) continue;
+
+        rawAiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawAiText) break;
+      } catch (e) {}
+    }
+    if (rawAiText) break;
+  }
+
+  if (rawAiText) {
+    const formattedAiText = formatSubSupScripts(escapeHtml(rawAiText)).replace(/\n/g, '<br>');
+    box.innerHTML = `
+      <div class="p-4 bg-indigo-50/90 dark:bg-indigo-950/60 border border-indigo-500/40 rounded-xl space-y-2 text-left shadow-sm my-2">
+        <div class="flex items-center justify-between text-indigo-700 dark:text-indigo-300 font-black text-xs border-b border-indigo-200 dark:border-indigo-800/60 pb-2">
+          <span class="flex items-center space-x-1.5"><i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> <span>Gemini AI Hinglish Step-by-Step Explanation</span></span>
+          <span class="bg-indigo-600 text-white font-mono text-[10px] px-2 py-0.5 rounded-full">Gemini AI</span>
+        </div>
+        <div class="text-xs text-slate-900 dark:text-slate-100 font-medium leading-relaxed">${formattedAiText}</div>
+      </div>
+    `;
+  } else {
+    // Seamless fallback to Smart Hinglish AI Formatter!
+    box.innerHTML = generateSmartHinglishFallback(q);
+  }
+}
+
 async function toggleMarkForReview(qId) {
   const q = currentQuestionsList.find(item => item.id === qId);
   if (!q) return;
@@ -2270,7 +2475,232 @@ async function attemptQuestion(qId, selectedIdx, correctIdx) {
   const currentQ = filteredPracticeQuestions.find(item => item.id === qId);
   if (currentQ) currentQ.status = newStatus;
 
+  if (isMockTestActive) {
+    mockTestUserAttempts[qId] = { selectedIdx, isCorrect };
+    updateTestTimerTick();
+  }
+
   updateStatsNumbersOnly();
+}
+
+// ==========================================
+// 🎯 CUSTOM TIMED MOCK TEST MODULE
+// ==========================================
+let isMockTestActive = false;
+let testSelectedQuestionCount = 10;
+let testDurationSeconds = 1800;
+let testRemainingSeconds = 1800;
+let testTimerInterval = null;
+let mockTestQuestionsList = [];
+let mockTestUserAttempts = {};
+let testStartTime = null;
+
+function openTestSetupModal() {
+  populateTestSubjectDropdown();
+  setTestQuestionCount(10);
+  setTestDuration(30);
+  document.getElementById('modal-test-setup')?.classList.remove('hidden');
+}
+
+function closeTestSetupModal() {
+  document.getElementById('modal-test-setup')?.classList.add('hidden');
+}
+
+function populateTestSubjectDropdown() {
+  const select = document.getElementById('test-subject-select');
+  if (!select) return;
+
+  const subjects = Array.from(new Set(currentQuestionsList.map(q => q.subject || 'Mechanical Engineering').filter(Boolean)));
+
+  select.innerHTML = `<option value="all">📁 All Subjects (Full Syllabus Mock)</option>` +
+    subjects.map(s => `<option value="${escapeHtml(s)}">📁 ${escapeHtml(s)}</option>`).join('');
+
+  onTestSubjectChange();
+}
+
+function onTestSubjectChange() {
+  const selectedSubj = document.getElementById('test-subject-select')?.value || 'all';
+  const infoEl = document.getElementById('test-subject-count-info');
+  if (!infoEl) return;
+
+  let totalAvailable = currentQuestionsList.length;
+  if (selectedSubj !== 'all') {
+    totalAvailable = currentQuestionsList.filter(q => (q.subject || "Mechanical Engineering") === selectedSubj).length;
+  }
+  infoEl.innerText = `${totalAvailable} Questions Available`;
+}
+
+function setTestQuestionCount(count) {
+  testSelectedQuestionCount = count;
+  const btns = document.querySelectorAll('.test-count-btn');
+  btns.forEach(b => {
+    b.className = 'test-count-btn py-2.5 rounded-xl border border-slate-300 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-indigo-500 transition';
+  });
+
+  const activeBtn = document.getElementById(`btn-count-${count}`);
+  if (activeBtn) {
+    activeBtn.className = 'test-count-btn py-2.5 rounded-xl border border-indigo-600 bg-indigo-600 text-white font-black text-xs transition shadow-md';
+  }
+}
+
+function setTestDuration(mins) {
+  const input = document.getElementById('test-duration-minutes');
+  if (input) input.value = mins;
+  updateTestTimerHint();
+}
+
+function updateTestTimerHint() {
+  const mins = parseInt(document.getElementById('test-duration-minutes')?.value || "30", 10);
+  const hintEl = document.getElementById('test-timer-display-hint');
+  if (hintEl) hintEl.innerText = `${mins} Minutes`;
+}
+
+function startMockTest() {
+  const selectedSubject = document.getElementById('test-subject-select')?.value || 'all';
+  const weaknessFocus = document.getElementById('test-weakness-focus')?.checked ?? true;
+  const mins = parseInt(document.getElementById('test-duration-minutes')?.value || "30", 10);
+
+  let pool = [...currentQuestionsList];
+  if (selectedSubject !== 'all') {
+    pool = pool.filter(q => (q.subject || "Mechanical Engineering") === selectedSubject);
+  }
+
+  if (pool.length === 0) {
+    alert("No questions found for the selected subject!");
+    return;
+  }
+
+  if (weaknessFocus) {
+    pool.sort((a, b) => {
+      const aScore = a.status === 'needs_revision' ? 2 : (a.status === 'pending' ? 1 : 0);
+      const bScore = b.status === 'needs_revision' ? 2 : (b.status === 'pending' ? 1 : 0);
+      return bScore - aScore;
+    });
+  } else {
+    pool.sort(() => Math.random() - 0.5);
+  }
+
+  mockTestQuestionsList = pool.slice(0, testSelectedQuestionCount);
+  isMockTestActive = true;
+  mockTestUserAttempts = {};
+  testDurationSeconds = mins * 60;
+  testRemainingSeconds = testDurationSeconds;
+  testStartTime = Date.now();
+
+  closeTestSetupModal();
+  switchTab('practice');
+
+  const banner = document.getElementById('test-live-timer-banner');
+  if (banner) banner.classList.remove('hidden');
+
+  const subjBannerEl = document.getElementById('test-banner-subject');
+  if (subjBannerEl) subjBannerEl.innerText = selectedSubject === 'all' ? 'FULL SYLLABUS' : selectedSubject.toUpperCase();
+
+  filteredPracticeQuestions = [...mockTestQuestionsList];
+  currentPracticeIndex = 0;
+  setPracticeViewMode('cards');
+
+  if (testTimerInterval) clearInterval(testTimerInterval);
+  testTimerInterval = setInterval(updateTestTimerTick, 1000);
+  updateTestTimerTick();
+}
+
+function updateTestTimerTick() {
+  if (!isMockTestActive) return;
+
+  if (testRemainingSeconds <= 0) {
+    clearInterval(testTimerInterval);
+    alert("⏰ Time is UP! Submitting your Mock Exam now.");
+    submitMockTest();
+    return;
+  }
+
+  testRemainingSeconds--;
+  const m = Math.floor(testRemainingSeconds / 60);
+  const s = testRemainingSeconds % 60;
+  const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+  const countdownEl = document.getElementById('test-live-countdown');
+  if (countdownEl) {
+    countdownEl.innerText = timeStr;
+    if (testRemainingSeconds < 300) {
+      countdownEl.className = "text-xl font-mono font-black text-rose-500 animate-pulse";
+    } else {
+      countdownEl.className = "text-xl font-mono font-black text-amber-400";
+    }
+  }
+
+  const progressEl = document.getElementById('test-banner-progress');
+  if (progressEl) {
+    const answeredCount = Object.keys(mockTestUserAttempts).length;
+    progressEl.innerText = `Question ${currentPracticeIndex + 1} of ${filteredPracticeQuestions.length} • ${answeredCount} Answered`;
+  }
+}
+
+function submitMockTest() {
+  if (!isMockTestActive) return;
+
+  isMockTestActive = false;
+  if (testTimerInterval) clearInterval(testTimerInterval);
+
+  const banner = document.getElementById('test-live-timer-banner');
+  if (banner) banner.classList.add('hidden');
+
+  const totalQs = mockTestQuestionsList.length;
+  let correctCount = 0;
+  let incorrectCount = 0;
+  const weakTopicsMap = {};
+
+  mockTestQuestionsList.forEach(q => {
+    const attempt = mockTestUserAttempts[q.id];
+    if (attempt) {
+      if (attempt.isCorrect) {
+        correctCount++;
+      } else {
+        incorrectCount++;
+        const tName = `${q.subject || 'General'} - ${q.topic || 'General'}`;
+        weakTopicsMap[tName] = (weakTopicsMap[tName] || 0) + 1;
+      }
+    }
+  });
+
+  const accuracy = totalQs > 0 ? Math.round((correctCount / totalQs) * 100) : 0;
+  const timeSpentSec = Math.round((Date.now() - testStartTime) / 1000);
+  const minsSpent = Math.floor(timeSpentSec / 60);
+  const secsSpent = timeSpentSec % 60;
+
+  const subjSelect = document.getElementById('test-subject-select')?.value || 'all';
+  if (document.getElementById('scorecard-subject-name')) {
+    document.getElementById('scorecard-subject-name').innerText = `Subject: ${subjSelect === 'all' ? 'All Subjects (Full Syllabus)' : subjSelect}`;
+  }
+  if (document.getElementById('scorecard-accuracy')) {
+    document.getElementById('scorecard-accuracy').innerText = `${accuracy}%`;
+  }
+  if (document.getElementById('scorecard-correct')) {
+    document.getElementById('scorecard-correct').innerText = correctCount;
+  }
+  if (document.getElementById('scorecard-incorrect')) {
+    document.getElementById('scorecard-incorrect').innerText = incorrectCount;
+  }
+  if (document.getElementById('scorecard-time-taken')) {
+    document.getElementById('scorecard-time-taken').innerText = `${minsSpent}m ${secsSpent}s`;
+  }
+
+  const weakListEl = document.getElementById('scorecard-weak-topics-list');
+  if (weakListEl) {
+    const weakTopicsArray = Object.keys(weakTopicsMap);
+    if (weakTopicsArray.length > 0) {
+      weakListEl.innerHTML = weakTopicsArray.map(t => `<div class="p-2 bg-white dark:bg-zinc-900 rounded-lg border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold">⚠️ ${escapeHtml(t)} (${weakTopicsMap[t]} Mistakes)</div>`).join('');
+    } else {
+      weakListEl.innerHTML = `<div class="p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold">🎉 Outstanding! Zero weak topics detected in this test!</div>`;
+    }
+  }
+
+  document.getElementById('modal-test-scorecard')?.classList.remove('hidden');
+}
+
+function closeTestScorecard() {
+  document.getElementById('modal-test-scorecard')?.classList.add('hidden');
 }
 
 async function updateStatsNumbersOnly() {
@@ -2778,36 +3208,85 @@ function initDailyChart() {
   initOverallDonutChart();
 }
 
+function updateChartSubjectDropdown() {
+  const select = document.getElementById('chart-subject-filter');
+  if (!select) return;
+
+  const currentVal = select.value || 'all';
+  const subjects = Array.from(new Set(currentQuestionsList.map(q => q.subject || 'Mechanical Engineering').filter(Boolean)));
+
+  select.innerHTML = `<option value="all">📁 All Subjects Overview</option>` +
+    subjects.map(s => `<option value="${escapeHtml(s)}">📁 ${escapeHtml(s)}</option>`).join('');
+
+  if (subjects.includes(currentVal)) {
+    select.value = currentVal;
+  } else {
+    select.value = 'all';
+  }
+}
+
 function initSubjectBreakdownChart() {
   const ctx = document.getElementById('subjectBreakdownChart')?.getContext('2d');
   if (!ctx) return;
 
+  updateChartSubjectDropdown();
+
+  const selectedSubject = document.getElementById('chart-subject-filter')?.value || 'all';
   const isDark = document.documentElement.classList.contains('dark');
   const textColor = isDark ? '#ffffff' : '#0f172a';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)';
 
+  const titleEl = document.getElementById('chart-title-text');
+  const subTitleEl = document.getElementById('chart-subtitle-text');
+
+  let labels = [];
+  let solvedData = [];
+  let revisionData = [];
+  let pendingData = [];
+
   const subjectsMap = {};
   currentQuestionsList.forEach(q => {
     const sName = q.subject || "Mechanical Engineering";
-    if (!subjectsMap[sName]) {
-      subjectsMap[sName] = { solved: 0, revision: 0, pending: 0 };
-    }
+    if (!subjectsMap[sName]) subjectsMap[sName] = { solved: 0, revision: 0, pending: 0 };
     if (q.status === 'solved') subjectsMap[sName].solved++;
     else if (q.status === 'needs_revision') subjectsMap[sName].revision++;
     else subjectsMap[sName].pending++;
   });
 
-  const labels = Object.keys(subjectsMap);
-  const solvedData = labels.map(s => subjectsMap[s].solved);
-  const revisionData = labels.map(s => subjectsMap[s].revision);
-  const pendingData = labels.map(s => subjectsMap[s].pending);
+  if (selectedSubject === 'all') {
+    if (titleEl) titleEl.innerText = "All Subjects Breakdown & Mastery Progress";
+    if (subTitleEl) subTitleEl.innerText = "Comparing solved, revision, and pending questions across all subjects";
+
+    labels = Object.keys(subjectsMap);
+    solvedData = labels.map(s => subjectsMap[s].solved);
+    revisionData = labels.map(s => subjectsMap[s].revision);
+    pendingData = labels.map(s => subjectsMap[s].pending);
+  } else {
+    if (titleEl) titleEl.innerText = `${selectedSubject} - Topic Breakdown`;
+    if (subTitleEl) subTitleEl.innerText = `Topic-wise distribution of questions inside ${selectedSubject}`;
+
+    const filtered = currentQuestionsList.filter(q => (q.subject || "Mechanical Engineering") === selectedSubject);
+    const topicsMap = {};
+    filtered.forEach(q => {
+      const tName = q.topic || "General Topic";
+      if (!topicsMap[tName]) topicsMap[tName] = { solved: 0, revision: 0, pending: 0 };
+      if (q.status === 'solved') topicsMap[tName].solved++;
+      else if (q.status === 'needs_revision') topicsMap[tName].revision++;
+      else topicsMap[tName].pending++;
+    });
+
+    labels = Object.keys(topicsMap);
+    solvedData = labels.map(t => topicsMap[t].solved);
+    revisionData = labels.map(t => topicsMap[t].revision);
+    pendingData = labels.map(t => topicsMap[t].pending);
+  }
 
   if (subjectChartInstance) subjectChartInstance.destroy();
 
   subjectChartInstance = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: labels.length ? labels : ['No Subjects'],
+      labels: labels.length ? labels : ['No Questions'],
       datasets: [
         {
           label: '✓ Solved (Mastered)',
@@ -2910,6 +3389,7 @@ function openConfigModal() {
   const cfg = QB.getFirebaseConfig();
   document.getElementById('cfg-project-id').value = cfg.projectId || '';
   document.getElementById('cfg-api-key').value = cfg.apiKey || '';
+  document.getElementById('cfg-gemini-key').value = localStorage.getItem('qb_gemini_api_key') || '';
   document.getElementById('modal-config').classList.remove('hidden');
 }
 
@@ -2920,11 +3400,15 @@ function closeConfigModal() {
 function saveConfigFromModal() {
   const projectId = document.getElementById('cfg-project-id').value.trim();
   const apiKey = document.getElementById('cfg-api-key').value.trim();
+  const geminiKey = document.getElementById('cfg-gemini-key').value.trim();
 
   QB.saveFirebaseConfig({ projectId, apiKey });
+  if (geminiKey) {
+    localStorage.setItem('qb_gemini_api_key', geminiKey);
+  }
 
   closeConfigModal();
-  alert("Firebase Configurations Saved!");
+  alert("Settings & API Configurations Saved Successfully! ✨");
   loadDashboardData();
 }
 

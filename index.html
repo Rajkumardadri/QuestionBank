@@ -152,6 +152,10 @@
       <button onclick="openConfigModal()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Settings & Recycle Bin">
         <i class="fa-solid fa-gear"></i>
       </button>
+      <button onclick="openTestSetupModal()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 px-3.5 py-2 rounded-xl text-sm font-black shadow-lg shadow-amber-500/20 flex items-center space-x-2 transition">
+        <i class="fa-solid fa-bullseye"></i>
+        <span>🎯 Timed Test</span>
+      </button>
       <button onclick="switchTab('practice')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/30 flex items-center space-x-2 transition">
         <i class="fa-solid fa-bolt"></i>
         <span class="hidden sm:inline">Start Practice</span>
@@ -335,17 +339,23 @@
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- 1. Subject-Wise Question & Accuracy Bar Chart -->
         <div class="lg:col-span-2 glass p-6 rounded-2xl space-y-4 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-          <div class="flex items-center justify-between">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 class="font-black text-lg flex items-center space-x-2 text-slate-900 dark:text-white">
                 <i class="fa-solid fa-chart-column text-indigo-500"></i>
-                <span>Subject-Wise Question Breakdown & Solved Progress</span>
+                <span id="chart-title-text">Subject-Wise Breakdown & Mastery Progress</span>
               </h2>
-              <p class="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5">
-                Visual status of questions across all subjects in your QuestionBank
+              <p class="text-xs text-slate-600 dark:text-slate-400 font-semibold mt-0.5" id="chart-subtitle-text">
+                Select a subject to view topic-level breakdown or view overall subject comparison
               </p>
             </div>
-            <span class="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-zinc-800 px-3 py-1 rounded-full border border-slate-300 dark:border-zinc-700">Real-Time Sync</span>
+
+            <div class="flex items-center space-x-2">
+              <select id="chart-subject-filter" onchange="initSubjectBreakdownChart()" class="bg-white dark:bg-zinc-950 border border-slate-300 dark:border-indigo-500/50 text-xs rounded-xl p-2 text-slate-900 dark:text-indigo-400 font-bold focus:outline-none">
+                <option value="all">📁 All Subjects</option>
+              </select>
+              <span class="text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-zinc-800 px-2.5 py-1 rounded-full border border-slate-300 dark:border-zinc-700 shrink-0">Live</span>
+            </div>
           </div>
 
           <div class="h-64 relative">
@@ -451,6 +461,34 @@
             <option value="testbook">Testbook Scraped</option>
             <option value="pdf">PDF Upload</option>
           </select>
+        </div>
+      </div>
+
+      <!-- LIVE MOCK TEST COUNTDOWN TIMER & CONTROL BANNER -->
+      <div id="test-live-timer-banner" class="hidden p-4 rounded-2xl bg-gradient-to-r from-slate-900 to-zinc-900 text-white border border-amber-500/50 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shadow-lg">
+            <i class="fa-solid fa-stopwatch animate-pulse"></i>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-black text-sm text-amber-400" id="test-banner-title">🎯 Custom Timed Mock Exam</span>
+              <span class="bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase" id="test-banner-subject">Maths</span>
+            </div>
+            <p class="text-xs text-slate-400 font-semibold" id="test-banner-progress">Question 1 of 30 • Weakness Focus Priority</p>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+          <div class="text-center bg-zinc-950 px-4 py-2 rounded-xl border border-zinc-800">
+            <div class="text-xs text-slate-400 font-bold uppercase text-[9px] tracking-wider">Time Remaining</div>
+            <div class="text-xl font-mono font-black text-amber-400" id="test-live-countdown">29:59</div>
+          </div>
+
+          <button onclick="submitMockTest()" class="bg-rose-600 hover:bg-rose-500 text-white px-5 py-2.5 rounded-xl text-xs font-black transition shadow-lg shadow-rose-600/30 flex items-center space-x-1.5">
+            <i class="fa-solid fa-flag-checkered"></i>
+            <span>Submit Test</span>
+          </button>
         </div>
       </div>
 
@@ -941,12 +979,22 @@
         </button>
       </div>
 
-      <!-- 2. Firebase Database Config -->
+      <!-- 2. Firebase Database & Gemini AI Config -->
       <div class="space-y-3 text-xs pt-1">
-        <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">Firebase Cloud Connection</h4>
+        <h4 class="font-extrabold text-slate-900 dark:text-white text-sm flex items-center justify-between">
+          <span>Google Gemini AI & Cloud Connection</span>
+          <span class="bg-indigo-600 text-white font-black text-[10px] px-2 py-0.5 rounded-full">Hinglish AI</span>
+        </h4>
+        <div>
+          <label class="block font-bold mb-1 text-slate-700 dark:text-slate-300 flex items-center justify-between">
+            <span>✨ Google Gemini API Key</span>
+            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-indigo-600 dark:text-indigo-400 underline font-extrabold text-[10px]">Get Free Key ↗</a>
+          </label>
+          <input type="text" id="cfg-gemini-key" placeholder="AIzaSy..." class="w-full p-2.5 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-slate-200 font-mono">
+        </div>
         <div>
           <label class="block font-bold mb-1 text-slate-700 dark:text-slate-300">Firebase Project ID</label>
-          <input type="text" id="cfg-project-id" placeholder="e.g. my-questionbank-app" class="w-full p-2.5 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-slate-200 font-mono">
+          <input type="text" id="cfg-project-id" placeholder="e.g. questionsbank-23100" class="w-full p-2.5 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-slate-200 font-mono">
         </div>
         <div>
           <label class="block font-bold mb-1 text-slate-700 dark:text-slate-300">Firebase API Key</label>
@@ -1051,8 +1099,134 @@
         <!-- Rendered via JS -->
       </div>
 
-      <div class="pt-3 border-t border-slate-200 dark:border-zinc-800 flex justify-end">
-        <button onclick="closeTopicReaderModal()" class="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-extrabold">Close Reader</button>
+  <!-- 🎯 CUSTOM TIMED MOCK TEST SETUP MODAL -->
+  <div id="modal-test-setup" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="glass max-w-lg w-full p-6 sm:p-8 rounded-3xl space-y-6 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-4">
+        <div>
+          <h3 class="font-black text-xl text-slate-900 dark:text-white flex items-center space-x-2.5">
+            <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center text-sm">
+              <i class="fa-solid fa-bullseye"></i>
+            </div>
+            <span>Custom Timed Mock Test Setup</span>
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-0.5">Configure custom exam hall test from your QuestionBank</p>
+        </div>
+        <button onclick="closeTestSetupModal()" class="text-slate-400 hover:text-black dark:hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+
+      <div class="space-y-4">
+        <!-- 1. Subject Select -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+            <span>📁 Select Target Subject</span>
+            <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-bold" id="test-subject-count-info">All Questions</span>
+          </label>
+          <select id="test-subject-select" onchange="onTestSubjectChange()" class="w-full p-3 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-indigo-400 font-black text-sm focus:outline-none focus:border-indigo-500">
+            <option value="all">📁 All Subjects (Full Syllabus Mock)</option>
+          </select>
+        </div>
+
+        <!-- 2. Question Count Selector -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+            🔢 Number of Questions
+          </label>
+          <div class="grid grid-cols-5 gap-2">
+            <button type="button" onclick="setTestQuestionCount(10)" id="btn-count-10" class="test-count-btn py-2.5 rounded-xl border border-indigo-600 bg-indigo-600 text-white font-black text-xs transition shadow-md">10 Qs</button>
+            <button type="button" onclick="setTestQuestionCount(20)" id="btn-count-20" class="test-count-btn py-2.5 rounded-xl border border-slate-300 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-indigo-500 transition">20 Qs</button>
+            <button type="button" onclick="setTestQuestionCount(30)" id="btn-count-30" class="test-count-btn py-2.5 rounded-xl border border-slate-300 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-indigo-500 transition">30 Qs</button>
+            <button type="button" onclick="setTestQuestionCount(50)" id="btn-count-50" class="test-count-btn py-2.5 rounded-xl border border-slate-300 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-indigo-500 transition">50 Qs</button>
+            <button type="button" onclick="setTestQuestionCount(100)" id="btn-count-100" class="test-count-btn py-2.5 rounded-xl border border-slate-300 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 text-slate-700 dark:text-slate-300 font-bold text-xs hover:border-indigo-500 transition">100 Qs</button>
+          </div>
+        </div>
+
+        <!-- 3. Priority Focus (Weakness Priority) -->
+        <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+          <div class="space-y-0.5">
+            <span class="font-extrabold text-xs text-slate-900 dark:text-white flex items-center space-x-1.5">
+              <i class="fa-solid fa-brain text-amber-500"></i>
+              <span>Weakness Priority Focus</span>
+            </span>
+            <p class="text-[11px] text-slate-600 dark:text-slate-400 font-medium">Prioritize questions marked as Needs Revision / low accuracy first</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="test-weakness-focus" checked class="sr-only peer">
+            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+
+        <!-- 4. Custom Timer Selection -->
+        <div>
+          <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+            <span>⏱️ Test Duration (Minutes)</span>
+            <span class="text-[11px] font-bold text-indigo-500" id="test-timer-display-hint">30 Minutes</span>
+          </label>
+          <div class="flex space-x-2">
+            <input type="number" id="test-duration-minutes" min="1" max="300" value="30" oninput="updateTestTimerHint()" class="flex-1 p-3 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-slate-900 dark:text-white font-black text-sm focus:outline-none focus:border-indigo-500">
+            <div class="flex space-x-1">
+              <button type="button" onclick="setTestDuration(10)" class="px-2.5 py-2 bg-slate-200 dark:bg-zinc-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold transition">10m</button>
+              <button type="button" onclick="setTestDuration(20)" class="px-2.5 py-2 bg-slate-200 dark:bg-zinc-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold transition">20m</button>
+              <button type="button" onclick="setTestDuration(30)" class="px-2.5 py-2 bg-slate-200 dark:bg-zinc-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold transition">30m</button>
+              <button type="button" onclick="setTestDuration(60)" class="px-2.5 py-2 bg-slate-200 dark:bg-zinc-800 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold transition">60m</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-200 dark:border-zinc-800 flex space-x-3">
+        <button onclick="startMockTest()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-2">
+          <i class="fa-solid fa-play"></i>
+          <span>🚀 Start Mock Exam Now</span>
+        </button>
+        <button onclick="closeTestSetupModal()" class="py-3 px-5 bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 rounded-2xl text-sm font-bold hover:bg-slate-300 dark:hover:bg-zinc-700">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🏆 TEST SCORECARD & ACCURACY REPORT MODAL -->
+  <div id="modal-test-scorecard" class="hidden fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="glass max-w-2xl w-full p-6 sm:p-8 rounded-3xl space-y-6 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl text-center">
+      <div class="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-500 flex items-center justify-center text-3xl mx-auto shadow-lg shadow-emerald-500/20">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+
+      <div>
+        <h3 class="font-black text-2xl text-slate-900 dark:text-white">Mock Test Performance Report</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold mt-1" id="scorecard-subject-name">Subject: All Subjects</p>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 border border-indigo-500/30">
+          <div class="text-2xl font-black text-indigo-600 dark:text-indigo-400" id="scorecard-accuracy">85%</div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">Accuracy %</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-500/30">
+          <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400" id="scorecard-correct">17</div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">Correct</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-500/30">
+          <div class="text-2xl font-black text-rose-600 dark:text-rose-400" id="scorecard-incorrect">3</div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">Incorrect</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-500/30">
+          <div class="text-2xl font-black text-amber-600 dark:text-amber-400" id="scorecard-time-taken">14m 20s</div>
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">Time Taken</div>
+        </div>
+      </div>
+
+      <div id="scorecard-weak-topics-box" class="p-4 rounded-2xl bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-left space-y-2">
+        <span class="font-extrabold text-xs text-slate-900 dark:text-white uppercase tracking-wider block">⚠️ Weak Topics Requiring Focus:</span>
+        <div id="scorecard-weak-topics-list" class="text-xs text-slate-600 dark:text-slate-300 font-semibold space-y-1"></div>
+      </div>
+
+      <div class="flex space-x-3 pt-2">
+        <button onclick="closeTestScorecard()" class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold rounded-2xl text-sm transition shadow-lg shadow-indigo-600/30">
+          Review Test Solutions
+        </button>
+        <button onclick="openTestSetupModal(); closeTestScorecard();" class="py-3 px-5 bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 rounded-2xl text-sm font-bold hover:bg-slate-300 dark:hover:bg-zinc-700">
+          Retake Test
+        </button>
       </div>
     </div>
   </div>
