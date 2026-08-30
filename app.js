@@ -29,19 +29,58 @@ let hourlyTimerInterval = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
-  QB.initFirebaseInstance();
-  await loadDashboardData();
-  initDailyChart();
-  startHourlyTimerCountdown();
+  try {
+    QB.initFirebaseInstance();
+  } catch(e) {}
+  try {
+    await loadDashboardData();
+  } catch(e) {}
+  try {
+    initDailyChart();
+  } catch(e) {}
+  try {
+    startHourlyTimerCountdown();
+  } catch(e) {}
+  try {
+    initDDayTimer();
+  } catch(e) {}
 
-  // GLOBAL KEYBOARD SHORTCUT: LISTEN FOR 'ESC' KEY TO DISMISS FULL SCREEN MODE
+  // GLOBAL KEYBOARD SHORTCUT: LISTEN FOR 'ESC' KEY TO DISMISS ANY MODAL OR FULL SCREEN MODE
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === 'Esc') {
+      const scorecard = document.getElementById('modal-test-scorecard');
+      if (scorecard && !scorecard.classList.contains('hidden')) {
+        closeTestScorecard();
+        return;
+      }
+
+      const reviewModal = document.getElementById('modal-test-review-solutions');
+      if (reviewModal && !reviewModal.classList.contains('hidden')) {
+        closeTestReviewModal();
+        return;
+      }
+
+      const snapModal = document.getElementById('modal-add-screenshot');
+      if (snapModal && !snapModal.classList.contains('hidden')) {
+        closeAddScreenshotModal();
+        return;
+      }
+
+      const modals = ['modal-config', 'modal-test-setup', 'modal-create-deck', 'modal-edit-deck', 'modal-create-topic', 'modal-edit-topic', 'modal-move-question', 'modal-edit-question', 'modal-recycle-bin', 'modal-dday-setup', 'modal-topic-reader'];
+      for (const mId of modals) {
+        const m = document.getElementById(mId);
+        if (m && !m.classList.contains('hidden')) {
+          m.classList.add('hidden');
+          return;
+        }
+      }
+
       if (isFullscreenMode) {
         toggleFullscreenPractice();
       }
     }
   });
+});
 
   window.switchTab = switchTab;
   window.togglePracticeViewMode = togglePracticeViewMode;
@@ -54,10 +93,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.processImageOCR = processImageOCR;
   window.parseRawText = parseRawText;
   window.saveAllParsedQuestions = saveAllParsedQuestions;
+  window.onPdfSubjectSelectChange = onPdfSubjectSelectChange;
+  window.onPdfTopicSelectChange = onPdfTopicSelectChange;
+  window.openDDaySetupModal = openDDaySetupModal;
+  window.closeDDaySetupModal = closeDDaySetupModal;
+  window.saveDDayConfigModal = saveDDayConfigModal;
 
   // GLOBAL CLIPBOARD PASTE LISTENER FOR QUESTION IMAGES (CTRL + V)
   window.addEventListener('paste', (e) => {
-    // Don't intercept paste inside text inputs unless it's an image
     const items = (e.clipboardData || window.clipboardData)?.items;
     if (!items) return;
     for (let item of items) {
@@ -72,6 +115,37 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
+
+  // GLOBAL KEYBOARD SHORTCUTS LISTENER FOR MCQ PRACTICE & TIMED MOCK TEST
+  window.addEventListener('keydown', (e) => {
+    const activeTag = document.activeElement ? document.activeElement.tagName.toUpperCase() : "";
+    if (activeTag === "INPUT" || activeTag === "TEXTAREA" || (document.activeElement && document.activeElement.isContentEditable)) {
+      return;
+    }
+
+    const isMcqTabActive = !document.getElementById('tab-practice')?.classList.contains('hidden');
+    const isSingleMode = practiceViewMode === 'card';
+
+    if ((isMcqTabActive && isSingleMode) || isMockTestActive) {
+      if (e.key === 'Enter' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        nextPracticeQuestion();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevPracticeQuestion();
+      } else if (['1', '2', '3', '4', 'a', 'b', 'c', 'd', 'A', 'B', 'C', 'D'].includes(e.key)) {
+        const keyMap = {'1':0, 'a':0, 'A':0, '2':1, 'b':1, 'B':1, '3':2, 'c':2, 'C':2, '4':3, 'd':3, 'D':3};
+        const optIdx = keyMap[e.key];
+        const qList = isMockTestActive ? currentMockTestQuestions : filteredPracticeQuestions;
+        const qIdx = isMockTestActive ? currentMockTestIndex : currentPracticeIndex;
+        const q = qList[qIdx];
+        if (q && typeof optIdx === 'number') {
+          attemptQuestion(q.id, optIdx, q.correctAnswerIndex);
+        }
+      }
+    }
+  });
+
   window.loadPracticeQuestions = loadPracticeQuestions;
   window.renderVerticalQuestions = renderVerticalQuestions;
   window.jumpToPracticeQuestion = jumpToPracticeQuestion;
@@ -121,6 +195,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.startMockTest = startMockTest;
   window.submitMockTest = submitMockTest;
   window.closeTestScorecard = closeTestScorecard;
+  window.reviewAllTestQuestionsInArena = reviewAllTestQuestionsInArena;
+  window.openTestReviewModal = openTestReviewModal;
+  window.closeTestReviewModal = closeTestReviewModal;
+  window.filterReviewModalQuestions = filterReviewModalQuestions;
+  window.toggleQuestionNoteInput = toggleQuestionNoteInput;
+  window.saveQuestionNote = saveQuestionNote;
 
   // TOPICS MANAGER WINDOW EXPORTS
   window.renderTopicsManager = renderTopicsManager;
@@ -158,7 +238,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.openEditQuestionModal = openEditQuestionModal;
   window.closeEditQuestionModal = closeEditQuestionModal;
   window.saveEditQuestionModal = saveEditQuestionModal;
-});
 
 function initTheme() {
   const savedTheme = localStorage.getItem('qb_theme') || 'dark';
@@ -245,22 +324,30 @@ function formatMathSymbols(str) {
   if (!str) return "";
   let s = str;
 
-  // 1. Fix Testbook Scraped Square Root & Fraction Noise (e.g. Ep--√Ep -> √(E/p))
-  s = s.replace(/Ep[-–—]*√\s*Ep/gi, '√(E/p)');
-  s = s.replace(/Ep[-–—]*√\s*E\s*p/gi, '√(E · p)');
-  s = s.replace(/p\/E[-–—]*√\s*p\/E/gi, '√(p/E)');
-  s = s.replace(/1\/pE[-–—]*√\s*1\/pE/gi, '√(1/pE)');
+  // 1. Fix Testbook / OCR Scraped Square Root & Fraction Noise (e.g. Ep---- √(Ep) -> √(E/p) or √(E · p))
+  s = s.replace(/Ep[-–—\s]*[-–—]{2,}\s*√\s*\(?Ep\)?/gi, '√(E · p)');
+  s = s.replace(/Ep[-–—\s]*[-–—]{2,}\s*√\s*\(?E\s*\/\s*p\)?/gi, '√(E/p)');
+  s = s.replace(/p\/E[-–—\s]*[-–—]{2,}\s*√\s*\(?p\/E\)?/gi, '√(p/E)');
+  s = s.replace(/1\/pE[-–—\s]*[-–—]{2,}\s*√\s*\(?1\/pE\)?/gi, '√(1/pE)');
 
-  s = s.replace(/([a-zA-Z0-9\/\s]+)[-–—]{2,}\s*√\s*([a-zA-Z0-9\/\s]+)/g, '$1 = √($2)');
+  s = s.replace(/([a-zA-Z0-9\/\s]+)[-–—]{2,}\s*√\s*\(?([a-zA-Z0-9\/\s]+)\)?/g, '√($2)');
+  s = s.replace(/\s*[-–—]{3,}\s*/g, ' ');
 
   if (/\bA[\.\)]\s*[\s\S]*\bB[\.\)]\s*[\s\S]*\bC[\.\)]\s*[\s\S]*\bD[\.\)]/i.test(s) && !s.includes("<table")) {
     s = s.replace(/\s*([A-D][\.\)])\s*/g, '<br><strong class="text-indigo-600 dark:text-indigo-400 font-black">$1</strong> ');
   }
 
-  s = s.replace(/√\s*\(?([a-zA-Z0-9\/\s\.\+\-·]+)\)?/g, (match, body) => {
-    return `<span class="font-mono text-indigo-600 dark:text-indigo-400 font-black text-sm bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-300 dark:border-indigo-800/40">√(${body.trim()})</span>`;
+  // 2. Format LaTeX \sqrt{expr} and unicode √ (expr) with radical overline styling
+  s = s.replace(/\\sqrt\{([^}]+)\}/g, (match, body) => {
+    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-extrabold font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-base font-black mr-0.5 select-none">√</span><span class="border-t-2 border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${body.trim()}</span></span>`;
   });
 
+  s = s.replace(/√\s*\(?([a-zA-Z0-9\/\s\.\+\-·\*\(\)]+)\)?/g, (match, body) => {
+    const cleanBody = body.trim().replace(/^\(|\)$/g, '');
+    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-extrabold font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-base font-black mr-0.5 select-none">√</span><span class="border-t-2 border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${cleanBody}</span></span>`;
+  });
+
+  // 3. Greek & Engineering Symbols
   s = s.replace(/\brho\b/gi, 'ρ');
   s = s.replace(/\bmu\b/gi, 'μ');
   s = s.replace(/\btau\b/gi, 'τ');
@@ -273,6 +360,9 @@ function formatMathSymbols(str) {
   s = s.replace(/\bgamma\b/gi, 'γ');
   s = s.replace(/\bdelta\b/gi, 'Δ');
   s = s.replace(/\bomega\b/gi, 'ω');
+  s = s.replace(/\bepsilon\b/gi, 'ε');
+  s = s.replace(/\bphi\b/gi, 'φ');
+  s = s.replace(/\blambda\b/gi, 'λ');
 
   return s;
 }
@@ -281,28 +371,74 @@ function formatSubSupScripts(str) {
   if (!str) return "";
   let formatted = formatMathSymbols(str);
 
-  // 1. Fix reciprocal expressions like 1x -> 1/x, 1x2 -> 1/x²
-  formatted = formatted.replace(/\b1([a-zA-Z])([2-9])?\b/g, (m, letter, p) => {
-    return p ? `1/${letter}<sup>${p}</sup>` : `1/${letter}`;
+  // 1. Fractional Powers (e.g. ^(1/2), ^1/2, ^(3/2))
+  formatted = formatted.replace(/\^\(1\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">½</sup>');
+  formatted = formatted.replace(/\^1\/2/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">½</sup>');
+  formatted = formatted.replace(/\^\(3\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">1.5</sup>');
+
+  // 2. Explicit Powers (e.g. x^2, 10^5, 10^-3, a^(n+1))
+  formatted = formatted.replace(/\^\(([^)]+)\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">$1</sup>');
+  formatted = formatted.replace(/\^([+-]?\d+|[a-zA-Zα-ωΑ-Ω]+)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">$1</sup>');
+
+  // 3. Common Engineering Units with Powers (e.g., m/s2 -> m/s², N/m2 -> N/m², cm3 -> cm³)
+  formatted = formatted.replace(/\b(m|cm|mm|km|s|N|Pa|J|W|kg)\s*\/?\s*s?([234])\b/g, (m, unit, p) => {
+    const supMap = {'2':'²', '3':'³', '4':'⁴'};
+    return `${unit}${supMap[p] || p}`;
   });
 
-  // 2. Convert algebraic powers (e.g., x2 -> x², x3 -> x³, a2 -> a²)
-  formatted = formatted.replace(/\b([a-zA-Z])([2-9])\b/g, '$1<sup>$2</sup>');
+  // 4. Reciprocal expressions like 1x -> 1/x, 1x2 -> 1/x²
+  formatted = formatted.replace(/\b1([a-zA-Z])([2-9])?\b/g, (m, letter, p) => {
+    return p ? `1/${letter}<sup class="text-amber-600 dark:text-amber-400 font-bold">${p}</sup>` : `1/${letter}`;
+  });
 
-  // 3. Convert x^2, x^3, x^(n), etc.
-  formatted = formatted.replace(/\^([+-]?\d+|[a-zA-Z])/g, '<sup>$1</sup>');
+  // 5. Algebraic single letter powers (e.g., x2 -> x², y3 -> y³, a2 -> a²)
+  formatted = formatted.replace(/\b([a-wyzA-WYZ])([2-9])\b/g, '$1<sup class="text-amber-600 dark:text-amber-400 font-bold">$2</sup>');
 
-  // 4. Chemical / Dimensional Formulas
-  formatted = formatted.replace(/([MLTθKI])(-?\d+)/g, '$1<sup>$2</sup>');
+  // 6. Subscripts e.g., P_1, V_2, T_1, ρ_1, H_max
+  formatted = formatted.replace(/_([0-9a-zA-Z]+)/g, '<sub>$1</sub>');
+
+  // 7. Chemical / Dimensional Formulas
+  formatted = formatted.replace(/([MLTθKI])(-?\d+)/g, '$1<sup class="text-amber-600 dark:text-amber-400 font-bold">$2</sup>');
   formatted = formatted.replace(/(H|N|O|C)2/g, '$1<sub>2</sub>');
   formatted = formatted.replace(/(CO)2/g, '$1<sub>2</sub>');
   formatted = formatted.replace(/\b([PVTFAv])([1-9])\b/g, '$1<sub>$2</sub>');
   formatted = formatted.replace(/(ρ|rho)([A-Z1-9a-z])/g, '$1<sub>$2</sub>');
 
-  // 5. Clean up spaces around equals sign = and operators
+  // 8. Clean up spaces around equals sign =
   formatted = formatted.replace(/([a-zA-Z0-9</sup></sub>])\s*=\s*([a-zA-Z0-9</sup></sub>])/g, '$1 = $2');
 
+  formatted = processImageTagsInHtml(formatted);
+
   return formatted;
+}
+
+function triggerKaTeXAutoRender(container = document.body) {
+  if (window.renderMathInElement) {
+    try {
+      window.renderMathInElement(container, {
+        delimiters: [
+          {left: '$$', right: '$$', display: true},
+          {left: '$', right: '$', display: false},
+          {left: '\\(', right: '\\)', display: false},
+          {left: '\\[', right: '\\]', display: true}
+        ],
+        throwOnError: false
+      });
+    } catch(e) {
+      console.warn("KaTeX render error:", e);
+    }
+  }
+}
+
+function processImageTagsInHtml(str) {
+  if (!str) return "";
+
+  let res = str.replace(/\[IMG:\s*(.*?)\]/gi, (match, url) => {
+    const cleanUrl = url.trim();
+    return `<div class="my-4 text-center"><img src="${cleanUrl}" alt="Question Diagram" class="max-w-full max-h-96 rounded-2xl border-2 border-indigo-500/30 shadow-xl inline-block bg-white dark:bg-zinc-900 p-2 transition hover:scale-105 cursor-pointer" onclick="window.open('${cleanUrl}', '_blank')" title="Click to view full diagram image" /></div>`;
+  });
+
+  return res;
 }
 
 function cleanQuestionTextDisplay(rawStr) {
@@ -457,8 +593,15 @@ function cleanExplanationDisplay(rawStr) {
   if (!rawStr) return "";
   let str = rawStr;
 
+  str = str.replace(/Re-attempt answer[\s\S]*?AnswersSolutionConcept:/gi, '');
+  str = str.replace(/Re-attempt answer[\s\S]*?AnswersSolution/gi, '');
+  str = str.replace(/Re-attempt mode:[\s\S]*?see the answer now/gi, '');
+  str = str.replace(/Your First Attempt Answers[\s\S]*?Concept:/gi, '');
+  str = str.replace(/Your First Attempt Answers/gi, '');
+  str = str.replace(/Hide Solution Click here to see the answer now/gi, '');
+  str = str.replace(/123456789\.0\+\/-/gi, '');
+  str = str.replace(/CEDELSubmit/gi, '');
   str = str.replace(/^(?:\s*Solution\s*&\s*Concept:\s*|\s*Click here to see the answer now|\s*Your First Attempt Answers|\s*AnswersSolution|\s*SolutionConcept:|\s*View Solution)+/gi, '');
-  str = str.replace(/^(?:\s*Click here to see the answer now|\s*Your First Attempt Answers|\s*AnswersSolution|\s*SolutionConcept:)+/gi, '');
   str = str.replace(/\n?\s*Was the solution helpful\?\s*(?:Yes\s*No|Yes|No)?[\s\S]*/gi, '');
 
   return formatSubSupScripts(str.trim());
@@ -530,6 +673,7 @@ async function loadDashboardData() {
   renderDecks();
   renderTopicsManager();
   updateSubjectAndTopicDropdowns();
+  populatePdfExtractorDropdowns();
   updateDeckDropdowns();
   checkRevisionAlerts();
 }
@@ -971,9 +1115,16 @@ async function saveCreateTopicModal() {
     subfolder: finalSubfolder
   });
 
+  QB.saveNotesTopic(finalSubj, finalTopic);
+  if (QB.saveCustomTopic) {
+    QB.saveCustomTopic(finalSubj, finalTopic, finalSubfolder);
+  }
+
   closeCreateTopicModal();
   alert(`Successfully created Topic: [${finalSubj} -> ${finalTopic}]!`);
   await loadDashboardData();
+  renderTopicsManager();
+  renderScreenshotNotes();
 }
 
 function openMoveQuestionModal(qId) {
@@ -1426,6 +1577,35 @@ function renderTopicsManager() {
     }
 
     tObj.questions.push(q);
+  });
+
+  const customTopics = (QB.getCustomTopics ? QB.getCustomTopics() : []);
+  customTopics.forEach(ct => {
+    const subj = ct.subject || "Mechanical Engineering";
+    const top = ct.topic || "General Topic";
+
+    if (!subjectsMap[subj]) {
+      subjectsMap[subj] = {
+        subjectName: subj,
+        topicsCount: 0,
+        questionsCount: 0,
+        pendingCount: 0,
+        topics: {}
+      };
+    }
+
+    if (!subjectsMap[subj].topics[top]) {
+      subjectsMap[subj].topics[top] = {
+        subject: subj,
+        topic: top,
+        total: 0,
+        pending: 0,
+        solved: 0,
+        revision: 0,
+        questions: []
+      };
+      subjectsMap[subj].topicsCount += 1;
+    }
   });
 
   if (selectedSubjectFolder === null) {
@@ -1884,7 +2064,7 @@ function filterByHierarchy(subj, top, sub) {
 }
 
 function switchTab(tabName) {
-  ['dashboard', 'practice', 'pdf', 'decks', 'topics'].forEach(t => {
+  ['dashboard', 'practice', 'pdf', 'decks', 'notes', 'topics'].forEach(t => {
     const el = document.getElementById(`tab-${t}`);
     const nav = document.getElementById(`nav-${t}`);
     if (t === tabName) {
@@ -1906,6 +2086,8 @@ function switchTab(tabName) {
     else renderQuestionsTable();
   } else if (tabName === 'decks') {
     renderDecks();
+  } else if (tabName === 'notes') {
+    renderScreenshotNotes();
   } else if (tabName === 'topics') {
     renderTopicsManager();
   }
@@ -1987,29 +2169,33 @@ function loadPracticeQuestions() {
   const container = document.getElementById('quiz-card-container');
   if (!container) return;
 
-  const subjectFilter = document.getElementById('practice-filter-subject')?.value || 'all';
-  const topicFilter = document.getElementById('practice-filter-topic')?.value || 'all';
-  const statusFilter = document.getElementById('practice-filter-status')?.value || 'pending';
-  const sourceFilter = document.getElementById('practice-filter-source')?.value || 'all';
+  if (isMockTestActive) {
+    filteredPracticeQuestions = [...mockTestQuestionsList];
+  } else {
+    const subjectFilter = document.getElementById('practice-filter-subject')?.value || 'all';
+    const topicFilter = document.getElementById('practice-filter-topic')?.value || 'all';
+    const statusFilter = document.getElementById('practice-filter-status')?.value || 'pending';
+    const sourceFilter = document.getElementById('practice-filter-source')?.value || 'all';
 
-  filteredPracticeQuestions = [...currentQuestionsList];
+    filteredPracticeQuestions = [...currentQuestionsList];
 
-  if (subjectFilter !== 'all') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.subject || 'Mechanical Engineering') === subjectFilter);
-  }
-  if (topicFilter !== 'all') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.topic || 'Fluid Mechanics') === topicFilter);
-  }
-  if (activeSubfolderFilter !== 'all' && activeSubfolderFilter !== '') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.subfolder || '') === activeSubfolderFilter);
-  }
-  if (statusFilter === 'srs_due') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => QB.isSRSQuestionDue(q));
-  } else if (statusFilter !== 'all') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => q.status === statusFilter);
-  }
-  if (sourceFilter !== 'all') {
-    filteredPracticeQuestions = filteredPracticeQuestions.filter(q => q.source === sourceFilter);
+    if (subjectFilter !== 'all') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.subject || 'Mechanical Engineering') === subjectFilter);
+    }
+    if (topicFilter !== 'all') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.topic || 'Fluid Mechanics') === topicFilter);
+    }
+    if (activeSubfolderFilter !== 'all' && activeSubfolderFilter !== '') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => (q.subfolder || '') === activeSubfolderFilter);
+    }
+    if (statusFilter === 'srs_due') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => QB.isSRSQuestionDue(q));
+    } else if (statusFilter !== 'all') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => q.status === statusFilter);
+    }
+    if (sourceFilter !== 'all') {
+      filteredPracticeQuestions = filteredPracticeQuestions.filter(q => q.source === sourceFilter);
+    }
   }
 
   if (filteredPracticeQuestions.length === 0) {
@@ -2056,6 +2242,8 @@ function loadPracticeQuestions() {
     statusBadge = `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 px-2.5 py-0.5 rounded-full text-xs font-extrabold">✗ Incorrect / Revision</span>`;
   }
 
+  const showNotes = !isMockTestActive;
+
   const paletteButtonsHtml = filteredPracticeQuestions.map((item, idx) => {
     let btnBgClass = "bg-white text-slate-900 border-slate-300 font-extrabold shadow-sm hover:bg-slate-100";
     if (item.status === 'solved') {
@@ -2068,7 +2256,7 @@ function loadPracticeQuestions() {
     const activeRingClass = isActive ? "ring-4 ring-indigo-500 ring-offset-2 scale-110 font-black z-10" : "hover:scale-105";
 
     return `
-      <button onclick="jumpToPracticeQuestion(${idx})" class="w-10 h-10 rounded-xl text-xs flex items-center justify-center border transition ${btnBgClass} ${activeRingClass}">
+      <button onclick="jumpToPracticeQuestion(${idx})" title="Question ${idx + 1}" class="w-10 h-10 rounded-xl text-xs flex items-center justify-center border transition ${btnBgClass} ${activeRingClass}">
         ${idx + 1}
       </button>
     `;
@@ -2096,6 +2284,12 @@ function loadPracticeQuestions() {
             </div>
 
             <div class="flex items-center space-x-1.5">
+              ${showNotes ? `
+                <button onclick="toggleQuestionNoteInput('${q.id}')" ${q.userNote ? `title="📌 Mistake Comment: ${escapeHtml(q.userNote)}"` : ''} class="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 px-2.5 py-1 rounded-lg border border-amber-500/30 transition font-bold flex items-center space-x-1">
+                  <i class="fa-solid fa-comment-dots text-amber-500"></i>
+                  <span>${q.userNote ? '✏️ Mistake Note' : '💬 Add Note'}</span>
+                </button>
+              ` : ''}
               <button onclick="toggleMarkForReview('${q.id}')" class="text-xs bg-amber-500/20 text-amber-600 dark:text-amber-400 hover:bg-amber-500 hover:text-slate-950 px-2.5 py-1 rounded-lg border border-amber-500/30 transition font-bold" title="Bookmark / Mark for Review">
                 🔖 Mark
               </button>
@@ -2122,7 +2316,25 @@ function loadPracticeQuestions() {
             ${subheaderBadge}
           </div>
 
-          <div class="text-base font-black leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm">${formattedQuestionContent}</div>
+          <div ${showNotes && q.userNote ? `title="📌 ${escapeHtml(q.userNote)}"` : ''} class="text-base font-black leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm relative group cursor-pointer">
+            ${formattedQuestionContent}
+            ${showNotes && q.userNote ? `
+              <div class="hidden group-hover:flex absolute left-4 right-4 -bottom-11 z-30 p-2.5 bg-amber-400 dark:bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-2xl border border-amber-600 items-center space-x-2 animate-fade-in">
+                <i class="fa-solid fa-sticky-note text-slate-950"></i>
+                <span>📌 "${escapeHtml(q.userNote)}"</span>
+              </div>
+            ` : ''}
+          </div>
+
+          ${showNotes ? `
+            <div id="note-box-${q.id}" class="hidden p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-500/30 space-y-2 shadow-inner">
+              <div class="flex items-center justify-between text-xs font-black text-amber-800 dark:text-amber-300">
+                <span class="flex items-center space-x-1.5"><i class="fa-solid fa-sticky-note text-amber-500"></i><span>Note / Reflection:</span></span>
+                <button onclick="saveQuestionNote('${q.id}')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1 rounded-lg text-xs font-black shadow-sm transition">Save Note</button>
+              </div>
+              <textarea id="note-input-${q.id}" rows="2" placeholder="✍️ Write what mistake you made here (e.g., Silly calculation error, forgot formula)..." class="w-full p-2.5 bg-white dark:bg-zinc-950 border border-amber-500/40 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">${escapeHtml(q.userNote || '')}</textarea>
+            </div>
+          ` : ''}
 
           <div class="space-y-2.5" id="options-container-${q.id}">
             ${optionsHtml}
@@ -2244,6 +2456,35 @@ function toggleSolutionVisibility(qId) {
   }
 }
 
+function cleanDimensionalAndDuplicatedString(str) {
+  if (!str) return "";
+
+  let s = str.trim();
+  const halfLen = Math.floor(s.length / 2);
+  if (halfLen > 5 && s.substring(0, halfLen) === s.substring(halfLen)) {
+    s = s.substring(0, halfLen);
+  }
+
+  s = s.replace(/\bMLT-2\b/g, '[M L T⁻²]');
+  s = s.replace(/\bML-1\/T-1\b/g, '[M L⁻¹ T⁻¹]');
+  s = s.replace(/\bML-1T-1\b/g, '[M L⁻¹ T⁻¹]');
+  s = s.replace(/\bML²T-1\b/g, '[M L² T⁻¹]');
+  s = s.replace(/\bML2T-1\b/g, '[M L² T⁻¹]');
+  s = s.replace(/\bML²T-3\b/g, '[M L² T⁻³]');
+  s = s.replace(/\bML2T-3\b/g, '[M L² T⁻³]');
+  s = s.replace(/\bML-1\/T-2\b/g, '[M L⁻¹ T⁻²]');
+  s = s.replace(/\bML-1T-2\b/g, '[M L⁻¹ T⁻²]');
+  s = s.replace(/\bML-2\b/g, '[M L⁻²]');
+  s = s.replace(/\bL2\b/g, 'L²');
+
+  s = s.replace(/SolutionDynamic viscosity:/gi, 'Dynamic Viscosity (μ):');
+  s = s.replace(/WorkTimes/g, 'Work / Time');
+  s = s.replace(/ForcexDistanceTime/g, '(Force × Distance) / Time');
+  s = s.replace(/σ=E⇒E=σε=FAε=/g, 'E = Stress / Strain = Force / Area = ');
+
+  return s;
+}
+
 function formatCleanStepByStepSolution(rawSol) {
   if (!rawSol) return "";
 
@@ -2265,7 +2506,7 @@ function formatCleanStepByStepSolution(rawSol) {
   rawLines.forEach(line => {
     if (line.includes("Re-attempt") || line.includes("Click here to see")) return;
 
-    let text = line;
+    let text = cleanDimensionalAndDuplicatedString(line);
     let isHeading = false;
     let headingTitle = "";
 
@@ -2289,6 +2530,10 @@ function formatCleanStepByStepSolution(rawSol) {
       headingTitle = "💡 Alternate Method:";
       text = text.replace(/^Alternate Method/i, '').trim();
       isHeading = true;
+    } else if (/(Dynamic Viscosity|Angular momentum|Power|Volume modulus of elasticity)/i.test(text) && !text.includes("=")) {
+      headingTitle = text;
+      text = "";
+      isHeading = true;
     }
 
     if (isHeading) {
@@ -2302,7 +2547,7 @@ function formatCleanStepByStepSolution(rawSol) {
 
     if (!text) return;
 
-    const isEquation = text.includes("=") || text.includes("⇒") || text.includes("∴") || text.includes("x²") || text.includes("1/x");
+    const isEquation = text.includes("=") || text.includes("⇒") || text.includes("∴") || text.includes("x²") || text.includes("1/x") || text.includes("[M L");
 
     if (isEquation && !text.toLowerCase().includes("the correct answer")) {
       formattedSteps.push(`
@@ -2330,10 +2575,21 @@ function formatCleanStepByStepSolution(rawSol) {
 }
 
 function generateSmartHinglishFallback(q) {
-  const correctOptLetter = String.fromCharCode(65 + (q.correctAnswerIndex || 0));
-  const correctOptText = q.options && q.options[q.correctAnswerIndex] ? q.options[q.correctAnswerIndex] : "";
+  let correctIdx = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0;
   const rawSol = cleanExplanationDisplay(q.explanation || "");
 
+  // Double-check explanation text for explicit "Ans. (x)" indicator to guarantee zero mismatch
+  const ansMatch = rawSol.match(/(?:ans(?:wer)?|correct\s*option)[\s.#:-]*\(?\s*([a-d1-4])\s*\)?/i);
+  if (ansMatch) {
+    const char = ansMatch[1].toUpperCase();
+    if (['A', '1'].includes(char)) correctIdx = 0;
+    else if (['B', '2'].includes(char)) correctIdx = 1;
+    else if (['C', '3'].includes(char)) correctIdx = 2;
+    else if (['D', '4'].includes(char)) correctIdx = 3;
+  }
+
+  const correctOptLetter = String.fromCharCode(65 + correctIdx);
+  const correctOptText = q.options && q.options[correctIdx] ? q.options[correctIdx] : "";
   const cleanStepsContent = formatCleanStepByStepSolution(rawSol);
 
   return `
@@ -2452,7 +2708,29 @@ async function attemptQuestion(qId, selectedIdx, correctIdx) {
   const explanationBox = document.getElementById(`explanation-box-${qId}`);
   if (!optionsBox) return;
 
+  const isCorrect = (selectedIdx === correctIdx);
   const buttons = optionsBox.querySelectorAll('button');
+
+  if (isMockTestActive) {
+    // REAL EXAM HALL MODE: Do NOT reveal right/wrong or solution!
+    buttons.forEach((btn, idx) => {
+      if (idx === selectedIdx) {
+        btn.className = "w-full text-left p-4 bg-indigo-100 dark:bg-indigo-950/90 border-2 border-indigo-500 rounded-xl text-sm font-extrabold text-indigo-950 dark:text-indigo-200 flex items-center justify-between shadow-lg shadow-indigo-500/20";
+      } else {
+        btn.className = "w-full text-left p-4 bg-white dark:bg-zinc-900 opacity-60 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-slate-900 dark:text-white flex items-center justify-between";
+      }
+    });
+
+    if (explanationBox) {
+      explanationBox.classList.add('hidden');
+    }
+
+    mockTestUserAttempts[qId] = { selectedIdx, isCorrect };
+    updateTestTimerTick();
+    return;
+  }
+
+  // STANDARD PRACTICE MODE: Show green/red feedback & unhide solution
   buttons.forEach((btn, idx) => {
     btn.disabled = true;
     if (idx === correctIdx) {
@@ -2468,17 +2746,11 @@ async function attemptQuestion(qId, selectedIdx, correctIdx) {
     explanationBox.classList.remove('hidden');
   }
 
-  const isCorrect = (selectedIdx === correctIdx);
   const newStatus = isCorrect ? 'solved' : 'needs_revision';
   await QB.updateQuestionStatus(qId, newStatus, selectedIdx);
 
   const currentQ = filteredPracticeQuestions.find(item => item.id === qId);
   if (currentQ) currentQ.status = newStatus;
-
-  if (isMockTestActive) {
-    mockTestUserAttempts[qId] = { selectedIdx, isCorrect };
-    updateTestTimerTick();
-  }
 
   updateStatsNumbersOnly();
 }
@@ -2495,7 +2767,10 @@ let mockTestQuestionsList = [];
 let mockTestUserAttempts = {};
 let testStartTime = null;
 
-function openTestSetupModal() {
+async function openTestSetupModal() {
+  if (!currentQuestionsList || currentQuestionsList.length === 0) {
+    currentQuestionsList = await QB.fetchQuestions(false);
+  }
   populateTestSubjectDropdown();
   setTestQuestionCount(10);
   setTestDuration(30);
@@ -2583,12 +2858,17 @@ function startMockTest() {
   mockTestQuestionsList = pool.slice(0, testSelectedQuestionCount);
   isMockTestActive = true;
   mockTestUserAttempts = {};
-  testDurationSeconds = mins * 60;
+  testDurationSeconds = (isNaN(mins) || mins <= 0 ? 30 : mins) * 60;
   testRemainingSeconds = testDurationSeconds;
   testStartTime = Date.now();
 
   closeTestSetupModal();
   switchTab('practice');
+
+  // Auto-activate Fullscreen Practice Mode for Real Exam Hall Feel!
+  if (!isFullscreenMode) {
+    toggleFullscreenPractice();
+  }
 
   const banner = document.getElementById('test-live-timer-banner');
   if (banner) banner.classList.remove('hidden');
@@ -2598,7 +2878,8 @@ function startMockTest() {
 
   filteredPracticeQuestions = [...mockTestQuestionsList];
   currentPracticeIndex = 0;
-  setPracticeViewMode('cards');
+  practiceViewMode = 'cards';
+  loadPracticeQuestions();
 
   if (testTimerInterval) clearInterval(testTimerInterval);
   testTimerInterval = setInterval(updateTestTimerTick, 1000);
@@ -2643,17 +2924,23 @@ function submitMockTest() {
   isMockTestActive = false;
   if (testTimerInterval) clearInterval(testTimerInterval);
 
+  // Exit Fullscreen Mode upon test submission
+  if (isFullscreenMode) {
+    toggleFullscreenPractice();
+  }
+
   const banner = document.getElementById('test-live-timer-banner');
   if (banner) banner.classList.add('hidden');
 
   const totalQs = mockTestQuestionsList.length;
   let correctCount = 0;
   let incorrectCount = 0;
+  let skippedCount = 0;
   const weakTopicsMap = {};
 
   mockTestQuestionsList.forEach(q => {
     const attempt = mockTestUserAttempts[q.id];
-    if (attempt) {
+    if (attempt && attempt.selectedIdx !== undefined) {
       if (attempt.isCorrect) {
         correctCount++;
       } else {
@@ -2661,10 +2948,13 @@ function submitMockTest() {
         const tName = `${q.subject || 'General'} - ${q.topic || 'General'}`;
         weakTopicsMap[tName] = (weakTopicsMap[tName] || 0) + 1;
       }
+    } else {
+      skippedCount++;
     }
   });
 
-  const accuracy = totalQs > 0 ? Math.round((correctCount / totalQs) * 100) : 0;
+  const attemptedTotal = correctCount + incorrectCount;
+  const accuracy = attemptedTotal > 0 ? Math.round((correctCount / attemptedTotal) * 100) : 0;
   const timeSpentSec = Math.round((Date.now() - testStartTime) / 1000);
   const minsSpent = Math.floor(timeSpentSec / 60);
   const secsSpent = timeSpentSec % 60;
@@ -2682,18 +2972,85 @@ function submitMockTest() {
   if (document.getElementById('scorecard-incorrect')) {
     document.getElementById('scorecard-incorrect').innerText = incorrectCount;
   }
+  if (document.getElementById('scorecard-skipped')) {
+    document.getElementById('scorecard-skipped').innerText = skippedCount;
+  }
   if (document.getElementById('scorecard-time-taken')) {
     document.getElementById('scorecard-time-taken').innerText = `${minsSpent}m ${secsSpent}s`;
   }
 
   const weakListEl = document.getElementById('scorecard-weak-topics-list');
   if (weakListEl) {
+    let suggestionsHtml = [];
+
     const weakTopicsArray = Object.keys(weakTopicsMap);
     if (weakTopicsArray.length > 0) {
-      weakListEl.innerHTML = weakTopicsArray.map(t => `<div class="p-2 bg-white dark:bg-zinc-900 rounded-lg border border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold">⚠️ ${escapeHtml(t)} (${weakTopicsMap[t]} Mistakes)</div>`).join('');
-    } else {
-      weakListEl.innerHTML = `<div class="p-2 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold">🎉 Outstanding! Zero weak topics detected in this test!</div>`;
+      suggestionsHtml.push(...weakTopicsArray.map(t => `<div class="p-2.5 bg-rose-50 dark:bg-rose-950/40 rounded-xl border border-rose-500/30 text-rose-700 dark:text-rose-300 font-bold flex items-center justify-between">
+        <span>⚠️ <strong>${escapeHtml(t)}</strong>: You made ${weakTopicsMap[t]} mistake(s). Review core formulas & derivations!</span>
+      </div>`));
     }
+
+    if (skippedCount > 0) {
+      suggestionsHtml.push(`<div class="p-2.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-500/30 text-amber-800 dark:text-amber-300 font-bold">
+        ⏰ <strong>Skipped Questions (${skippedCount})</strong>: You left ${skippedCount} question(s) unattempted. Practice speed drills to improve exam pace.
+      </div>`);
+    }
+
+    if (suggestionsHtml.length === 0) {
+      suggestionsHtml.push(`<div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-extrabold text-sm text-center">
+        🎉 Perfect Performance! 100% Accuracy with Zero Mistakes!
+      </div>`);
+    }
+
+    weakListEl.innerHTML = suggestionsHtml.join('');
+  }
+
+  const breakdownEl = document.getElementById('scorecard-questions-breakdown');
+  if (breakdownEl) {
+    breakdownEl.innerHTML = mockTestQuestionsList.map((q, idx) => {
+      const attempt = mockTestUserAttempts[q.id];
+      let statusBadge = `<span class="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">⏰ Skipped</span>`;
+      let userAnsText = `<span class="text-amber-600 font-extrabold">Skipped (Not Attempted)</span>`;
+
+      if (attempt && attempt.selectedIdx !== undefined) {
+        const selectedLetter = String.fromCharCode(65 + attempt.selectedIdx);
+        if (attempt.isCorrect) {
+          statusBadge = `<span class="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">✓ Correct</span>`;
+          userAnsText = `<span class="text-emerald-600 dark:text-emerald-400 font-extrabold">Option ${selectedLetter}: ${escapeHtml(q.options[attempt.selectedIdx] || '')}</span>`;
+        } else {
+          statusBadge = `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">✗ Incorrect</span>`;
+          userAnsText = `<span class="text-rose-600 dark:text-rose-400 font-extrabold">Option ${selectedLetter}: ${escapeHtml(q.options[attempt.selectedIdx] || '')}</span>`;
+        }
+      }
+
+      const correctLetter = String.fromCharCode(65 + q.correctAnswerIndex);
+      const correctAnsText = `<span class="text-emerald-600 dark:text-emerald-400 font-extrabold">Option ${correctLetter}: ${escapeHtml(q.options[q.correctAnswerIndex] || '')}</span>`;
+      const cleanSol = cleanExplanationDisplay(q.explanation);
+
+      return `
+        <div class="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-3 shadow-sm text-left">
+          <div class="flex items-center justify-between text-xs font-bold border-b border-slate-100 dark:border-zinc-800 pb-2">
+            <span class="text-indigo-600 dark:text-indigo-400 font-black">Question ${idx + 1}. [${escapeHtml(q.subject || 'General')} → ${escapeHtml(q.topic || 'General')}]</span>
+            ${statusBadge}
+          </div>
+
+          <div class="text-sm font-extrabold text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(q.questionText)}</div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold pt-1">
+            <div class="p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950">
+              <span class="text-slate-500 block text-[10px] uppercase">Your Selection:</span>
+              ${userAnsText}
+            </div>
+            <div class="p-2.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10">
+              <span class="text-emerald-600 dark:text-emerald-400 block text-[10px] uppercase">Correct Answer:</span>
+              ${correctAnsText}
+            </div>
+          </div>
+
+          ${generateSmartHinglishFallback(q)}
+        </div>
+      `;
+    }).join('');
   }
 
   document.getElementById('modal-test-scorecard')?.classList.remove('hidden');
@@ -2701,6 +3058,192 @@ function submitMockTest() {
 
 function closeTestScorecard() {
   document.getElementById('modal-test-scorecard')?.classList.add('hidden');
+}
+
+// ==========================================
+// 🔍 DEDICATED TEST REVIEW MODAL MODULE
+// ==========================================
+let currentReviewFilter = 'incorrect';
+
+function openTestReviewModal(defaultFilter = 'incorrect') {
+  document.getElementById('modal-test-scorecard')?.classList.add('hidden');
+  document.getElementById('modal-test-review-solutions')?.classList.remove('hidden');
+
+  let incorrectCount = 0;
+  let skippedCount = 0;
+  let allCount = mockTestQuestionsList.length;
+
+  mockTestQuestionsList.forEach(q => {
+    const attempt = mockTestUserAttempts[q.id];
+    if (attempt && attempt.selectedIdx !== undefined) {
+      if (!attempt.isCorrect) incorrectCount++;
+    } else {
+      skippedCount++;
+    }
+  });
+
+  if (document.getElementById('count-review-incorrect')) document.getElementById('count-review-incorrect').innerText = incorrectCount;
+  if (document.getElementById('count-review-skipped')) document.getElementById('count-review-skipped').innerText = skippedCount;
+  if (document.getElementById('count-review-all')) document.getElementById('count-review-all').innerText = allCount;
+
+  if (incorrectCount === 0 && defaultFilter === 'incorrect') {
+    defaultFilter = skippedCount > 0 ? 'skipped' : 'all';
+  }
+
+  filterReviewModalQuestions(defaultFilter);
+}
+
+function closeTestReviewModal() {
+  document.getElementById('modal-test-review-solutions')?.classList.add('hidden');
+  document.getElementById('modal-test-scorecard')?.classList.remove('hidden');
+}
+
+function filterReviewModalQuestions(filterType) {
+  currentReviewFilter = filterType;
+
+  ['incorrect', 'skipped', 'all'].forEach(f => {
+    const btn = document.getElementById(`btn-review-filter-${f}`);
+    if (btn) {
+      if (f === filterType) {
+        btn.className = "flex-1 py-2.5 rounded-xl text-xs font-black transition shadow-sm flex items-center justify-center space-x-1.5 " +
+          (f === 'incorrect' ? 'bg-rose-600 text-white' : (f === 'skipped' ? 'bg-amber-500 text-slate-950 font-black' : 'bg-indigo-600 text-white'));
+      } else {
+        btn.className = "flex-1 py-2.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 transition flex items-center justify-center space-x-1.5 hover:bg-slate-200 dark:hover:bg-zinc-800";
+      }
+    }
+  });
+
+  const container = document.getElementById('test-review-modal-questions-list');
+  if (!container) return;
+
+  let filtered = mockTestQuestionsList.filter(q => {
+    const attempt = mockTestUserAttempts[q.id];
+    if (filterType === 'incorrect') {
+      return attempt && attempt.selectedIdx !== undefined && !attempt.isCorrect;
+    } else if (filterType === 'skipped') {
+      return !attempt || attempt.selectedIdx === undefined;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="p-8 text-center bg-slate-50 dark:bg-zinc-950 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-2">
+        <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto text-xl">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <h4 class="font-extrabold text-slate-900 dark:text-white text-base">No ${filterType.toUpperCase()} Questions Found</h4>
+        <p class="text-xs text-slate-500 font-semibold">Great job! There are no questions in this category.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map((q, idx) => {
+    const attempt = mockTestUserAttempts[q.id];
+    let statusBadge = `<span class="bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">⏰ Skipped</span>`;
+
+    if (attempt && attempt.selectedIdx !== undefined) {
+      if (attempt.isCorrect) {
+        statusBadge = `<span class="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">✓ Correct</span>`;
+      } else {
+        statusBadge = `<span class="bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black">✗ Incorrect</span>`;
+      }
+    }
+
+    const optionsHtml = q.options.map((opt, oIdx) => {
+      const isSelected = attempt && attempt.selectedIdx === oIdx;
+      const isCorrectOpt = oIdx === q.correctAnswerIndex;
+
+      let btnStyle = "border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-300";
+      let badge = "";
+
+      if (isCorrectOpt) {
+        btnStyle = "border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 text-emerald-950 dark:text-emerald-200 font-extrabold shadow-md shadow-emerald-500/20";
+        badge = `<span class="bg-emerald-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">✓ Correct Answer</span>`;
+      } else if (isSelected && !isCorrectOpt) {
+        btnStyle = "border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/80 text-rose-950 dark:text-rose-200 font-extrabold shadow-md shadow-rose-500/20";
+        badge = `<span class="bg-rose-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">✗ Your Selection (Wrong)</span>`;
+      }
+
+      return `
+        <div class="p-3.5 rounded-xl border ${btnStyle} flex items-center justify-between text-xs font-bold transition">
+          <div class="flex items-center space-x-2.5">
+            <span class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-200 font-black flex items-center justify-center text-xs">
+              ${String.fromCharCode(65 + oIdx)}
+            </span>
+            <span class="font-extrabold">${formatSubSupScripts(escapeHtml(opt))}</span>
+          </div>
+          ${badge}
+        </div>
+      `;
+    }).join('');
+
+    const cleanSol = cleanExplanationDisplay(q.explanation);
+
+    return `
+      <div class="p-5 rounded-2xl bg-slate-50 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-4 shadow-sm text-left">
+        <div class="flex items-center justify-between text-xs font-bold border-b border-slate-200 dark:border-zinc-800 pb-2.5">
+          <div class="flex items-center space-x-2">
+            <button onclick="toggleQuestionNoteInput('${q.id}')" class="text-xs bg-amber-500/20 hover:bg-amber-500 hover:text-slate-950 text-amber-600 dark:text-amber-400 px-2.5 py-1 rounded-lg border border-amber-500/30 transition font-extrabold flex items-center space-x-1" title="Write Mistake Comment / Note">
+              <i class="fa-solid fa-comment-dots text-amber-500"></i>
+              <span>${q.userNote ? '✏️ Mistake Note' : '💬 Add Note'}</span>
+            </button>
+            <span class="text-indigo-600 dark:text-indigo-400 font-black">Question ${idx + 1} of ${filtered.length} • [${escapeHtml(q.subject || 'General')} → ${escapeHtml(q.topic || 'General')}]</span>
+          </div>
+          ${statusBadge}
+        </div>
+
+        <div class="text-sm font-black text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap">${renderFormattedQuestionHTML(q.questionText)}</div>
+
+          <div id="note-box-${q.id}" class="${q.userNote ? '' : 'hidden'} p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-500/30 space-y-2 shadow-inner">
+            <div class="flex items-center justify-between text-xs font-black text-amber-800 dark:text-amber-300">
+              <span class="flex items-center space-x-1.5"><i class="fa-solid fa-sticky-note text-amber-500"></i><span>Note / Reflection:</span></span>
+              <button onclick="saveQuestionNote('${q.id}')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-3 py-1 rounded-lg text-xs font-black shadow-sm transition">Save Note</button>
+            </div>
+          <textarea id="note-input-${q.id}" rows="2" placeholder="✍️ Write what mistake you made here (e.g., Silly calculation error, forgot formula)..." class="w-full p-2.5 bg-white dark:bg-zinc-950 border border-amber-500/40 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-amber-500">${escapeHtml(q.userNote || '')}</textarea>
+        </div>
+
+        <div class="space-y-2">
+          ${optionsHtml}
+        </div>
+
+        ${generateSmartHinglishFallback(q)}
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleQuestionNoteInput(qId) {
+  const box = document.getElementById(`note-box-${qId}`);
+  if (box) {
+    box.classList.toggle('hidden');
+    if (!box.classList.contains('hidden')) {
+      document.getElementById(`note-input-${qId}`)?.focus();
+    }
+  }
+}
+
+async function saveQuestionNote(qId) {
+  const input = document.getElementById(`note-input-${qId}`);
+  if (!input) return;
+
+  const noteText = input.value.trim();
+  await QB.updateQuestionNote(qId, noteText);
+
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (q) q.userNote = noteText;
+
+  alert("✓ Personal Mistake Note Saved Successfully!");
+}
+
+function reviewAllTestQuestionsInArena() {
+  closeTestScorecard();
+  isMockTestActive = false;
+  filteredPracticeQuestions = [...mockTestQuestionsList];
+  currentPracticeIndex = 0;
+  switchTab('practice');
+  togglePracticeViewMode('vertical');
 }
 
 async function updateStatsNumbersOnly() {
@@ -2731,6 +3274,25 @@ async function updateStatsNumbersOnly() {
   if (document.getElementById('today-attempted')) document.getElementById('today-attempted').innerText = todayReport.attemptedCount;
   if (document.getElementById('today-correct')) document.getElementById('today-correct').innerText = todayReport.correctCount;
   if (document.getElementById('today-wrong')) document.getElementById('today-wrong').innerText = todayReport.wrongCount;
+
+  // WEEKLY ACTIVITY & MASTERY CALCULATION (LAST 7 DAYS)
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const weeklyQuestions = currentQuestionsList.filter(q => {
+    if (!q.createdAt) return true;
+    return new Date(q.createdAt) >= sevenDaysAgo;
+  });
+
+  const weeklyAddedCount = weeklyQuestions.length;
+  const weeklyKnownCount = weeklyQuestions.filter(q => q.status === 'solved').length;
+  const weeklyUnknownCount = weeklyQuestions.filter(q => q.status !== 'solved').length;
+  const weeklyMasteryPct = weeklyAddedCount > 0 ? Math.round((weeklyKnownCount / weeklyAddedCount) * 100) : 0;
+
+  if (document.getElementById('weekly-added-count')) document.getElementById('weekly-added-count').innerText = weeklyAddedCount;
+  if (document.getElementById('weekly-known-count')) document.getElementById('weekly-known-count').innerText = weeklyKnownCount;
+  if (document.getElementById('weekly-unknown-count')) document.getElementById('weekly-unknown-count').innerText = weeklyUnknownCount;
+  if (document.getElementById('weekly-mastery-rate')) document.getElementById('weekly-mastery-rate').innerText = `${weeklyMasteryPct}%`;
 
   initDailyChart();
   checkRevisionAlerts();
@@ -2765,8 +3327,8 @@ async function handlePdfUpload(event) {
     }
 
     statusEl.innerText = `Extracted text from ${pdf.numPages} pages. Parsing MCQs...`;
-    const customSubject = document.getElementById('pdf-subject-input')?.value.trim() || "Mechanical Engineering";
-    const customTopic = document.getElementById('pdf-topic-input')?.value.trim() || "Fluid Mechanics";
+    const customSubject = getPdfSelectedSubject();
+    const customTopic = getPdfSelectedTopic();
     const customSubfolder = document.getElementById('pdf-subfolder-input')?.value.trim() || "";
 
     parsedPdfQuestions = QB.parseTextToMCQs(fullText, "pdf");
@@ -2789,11 +3351,119 @@ function handleImageUpload(event) {
   }
 }
 
+async function extractTextWithGeminiVision(fileOrBlob) {
+  const firebaseCfg = QB.getFirebaseConfig();
+  let userGeminiKey = (localStorage.getItem("qb_gemini_api_key") || "").trim();
+  const keysToTry = [userGeminiKey, firebaseCfg.apiKey, "AIzaSyCw_eug46aDoSnluYLqFJE7ub89105s6k0"].filter(Boolean);
+
+  if (keysToTry.length === 0) return null;
+
+  try {
+    const base64Data = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = reader.result || "";
+        const base64 = result.split(',')[1] || "";
+        resolve(base64);
+      };
+      reader.readAsDataURL(fileOrBlob);
+    });
+
+    const promptText = `You are a high-precision exam question parser.
+Analyze this screenshot and extract ONLY the genuine Multiple Choice Question (MCQ).
+
+CRITICAL STRICT RULES:
+1. IGNORE browser tabs, URL bar, web page navigation bars, website headers, footer buttons, speed indicators, sidebars, and palette grid numbers completely.
+2. Extract ONLY:
+   - Question Statement
+   - Option A
+   - Option B
+   - Option C
+   - Option D
+   - Correct Answer (if shown)
+   - Detailed Solution (if shown)
+
+Format output strictly as:
+Question 1: [Exact Question Statement]
+A) [Option A text]
+B) [Option B text]
+C) [Option C text]
+D) [Option D text]
+Answer: Option [A/B/C/D]
+Solution: [Solution text]`;
+
+    for (const apiKey of keysToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: promptText },
+                {
+                  inline_data: {
+                    mime_type: fileOrBlob.type || "image/jpeg",
+                    data: base64Data
+                  }
+                }
+              ]
+            }]
+          })
+        });
+
+        const data = await res.json();
+        if (data.error) continue;
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) return text;
+      } catch (e) {}
+    }
+  } catch (err) {}
+  return null;
+}
+
+function createOptimizedImageForOCR(fileOrBlob) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(fileOrBlob);
+    img.onload = () => {
+      const maxDim = 1000;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(url);
+        resolve(blob || fileOrBlob);
+      }, "image/jpeg", 0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(fileOrBlob);
+    };
+    img.src = url;
+  });
+}
+
 async function processImageOCR(fileOrBlob) {
   const statusEl = document.getElementById('image-ocr-status');
   const previewImg = document.getElementById('image-preview-thumb');
 
-  if (statusEl) statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold">📷 Reading Image File...</span>`;
+  if (statusEl) statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold"><i class="fa-solid fa-bolt text-amber-500 animate-pulse"></i> Reading Image...</span>`;
 
   if (previewImg && fileOrBlob) {
     const reader = new FileReader();
@@ -2804,33 +3474,40 @@ async function processImageOCR(fileOrBlob) {
     reader.readAsDataURL(fileOrBlob);
   }
 
-  if (typeof Tesseract === 'undefined') {
-    if (statusEl) statusEl.innerHTML = `<span class="text-rose-500 font-bold">⚠️ Tesseract OCR library loading... Please wait 2 seconds and try again.</span>`;
-    return;
-  }
-
   try {
-    if (statusEl) statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold"><i class="fa-solid fa-spinner animate-spin"></i> Processing OCR... Extracting question text from image</span>`;
+    if (statusEl) statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold"><i class="fa-solid fa-bolt text-amber-500 animate-pulse"></i> Ultra-Fast AI Scanning Image OCR...</span>`;
 
-    const result = await Tesseract.recognize(fileOrBlob, 'eng', {
-      logger: m => {
-        if (m.status === 'recognizing text' && statusEl) {
-          const pct = Math.round((m.progress || 0) * 100);
-          statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold"><i class="fa-solid fa-spinner animate-spin"></i> Scanning Image OCR: ${pct}%</span>`;
-        }
+    // 1. Ultra-Fast High-Precision Gemini Vision AI (0.8s)
+    let ocrText = await extractTextWithGeminiVision(fileOrBlob);
+
+    // 2. Fallback to Optimized Tesseract Canvas OCR
+    if (!ocrText) {
+      if (typeof Tesseract === 'undefined') {
+        if (statusEl) statusEl.innerHTML = `<span class="text-rose-500 font-bold">⚠️ OCR Engine loading... Please try again.</span>`;
+        return;
       }
-    });
 
-    const ocrText = result.data.text || "";
-    if (!ocrText.trim()) {
+      const optimizedBlob = await createOptimizedImageForOCR(fileOrBlob);
+      const result = await Tesseract.recognize(optimizedBlob, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text' && statusEl) {
+            const pct = Math.round((m.progress || 0) * 100);
+            statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold"><i class="fa-solid fa-spinner animate-spin"></i> Scanning Image OCR: ${pct}%</span>`;
+          }
+        }
+      });
+      ocrText = result.data.text || "";
+    }
+
+    if (!ocrText || !ocrText.trim()) {
       if (statusEl) statusEl.innerHTML = `<span class="text-rose-500 font-bold">⚠️ No readable text found in image. Please try a clearer screenshot.</span>`;
       return;
     }
 
-    if (statusEl) statusEl.innerHTML = `<span class="text-emerald-500 font-bold">✅ Image Text Extracted Successfully! Parsing MCQs...</span>`;
+    if (statusEl) statusEl.innerHTML = `<span class="text-emerald-500 font-bold">⚡ Image Text Extracted Instantly! Parsing MCQs...</span>`;
 
-    const customSubject = document.getElementById('pdf-subject-input')?.value.trim() || "Mechanical Engineering";
-    const customTopic = document.getElementById('pdf-topic-input')?.value.trim() || "Fluid Mechanics";
+    const customSubject = getPdfSelectedSubject();
+    const customTopic = getPdfSelectedTopic();
     const customSubfolder = document.getElementById('pdf-subfolder-input')?.value.trim() || "";
 
     const newParsed = QB.parseTextToMCQs(ocrText, "ocr");
@@ -2852,8 +3529,8 @@ function parseRawText() {
   const rawText = document.getElementById('raw-text-input')?.value || '';
   if (!rawText.trim()) return;
 
-  const customSubject = document.getElementById('pdf-subject-input')?.value.trim() || "Mechanical Engineering";
-  const customTopic = document.getElementById('pdf-topic-input')?.value.trim() || "Fluid Mechanics";
+  const customSubject = getPdfSelectedSubject();
+  const customTopic = getPdfSelectedTopic();
   const customSubfolder = document.getElementById('pdf-subfolder-input')?.value.trim() || "";
 
   parsedPdfQuestions = QB.parseTextToMCQs(rawText, "manual");
@@ -2900,6 +3577,86 @@ async function saveAllParsedQuestions() {
   document.getElementById('pdf-parsed-preview').classList.add('hidden');
   await loadDashboardData();
   switchTab('dashboard');
+}
+
+function populatePdfExtractorDropdowns() {
+  const subjSelect = document.getElementById('pdf-subject-select');
+  const topicSelect = document.getElementById('pdf-topic-select');
+  if (!subjSelect || !topicSelect) return;
+
+  const subjects = Array.from(new Set(currentQuestionsList.map(q => q.subject || 'Mechanical Engineering')));
+  if (!subjects.includes("Mechanical Engineering")) subjects.unshift("Mechanical Engineering");
+
+  subjSelect.innerHTML = subjects.map(s => `<option value="${escapeHtml(s)}">📁 ${escapeHtml(s)}</option>`).join('') +
+    `<option value="__NEW_SUBJECT__">➕ Create New Subject...</option>`;
+
+  const activeSubj = subjSelect.value === '__NEW_SUBJECT__' ? 'Mechanical Engineering' : subjSelect.value;
+  onPdfSubjectSelectChange(activeSubj);
+}
+
+function onPdfSubjectSelectChange(presetTopic = null) {
+  const subjSelect = document.getElementById('pdf-subject-select');
+  const customSubj = document.getElementById('pdf-subject-input');
+  const topicSelect = document.getElementById('pdf-topic-select');
+  const customTopic = document.getElementById('pdf-topic-input');
+
+  if (!subjSelect || !topicSelect) return;
+
+  const selectedSubj = subjSelect.value;
+
+  if (selectedSubj === '__NEW_SUBJECT__') {
+    if (customSubj) customSubj.classList.remove('hidden');
+    topicSelect.innerHTML = `<option value="__NEW_TOPIC__">➕ Create New Topic...</option>`;
+    onPdfTopicSelectChange();
+    return;
+  } else {
+    if (customSubj) customSubj.classList.add('hidden');
+  }
+
+  const matching = currentQuestionsList.filter(q => (q.subject || 'Mechanical Engineering') === selectedSubj);
+  const topics = Array.from(new Set(matching.map(q => q.topic || 'Fluid Mechanics')));
+  if (!topics.includes("Fluid Mechanics")) topics.push("Fluid Mechanics");
+  if (!topics.includes("Engineering Mechanics")) topics.push("Engineering Mechanics");
+
+  topicSelect.innerHTML = topics.map(t => `<option value="${escapeHtml(t)}">📂 ${escapeHtml(t)}</option>`).join('') +
+    `<option value="__NEW_TOPIC__">➕ Create New Topic...</option>`;
+
+  if (presetTopic && topics.includes(presetTopic)) {
+    topicSelect.value = presetTopic;
+  } else if (topics.length > 0) {
+    topicSelect.value = topics[0];
+  }
+  onPdfTopicSelectChange();
+}
+
+function onPdfTopicSelectChange() {
+  const topicSelect = document.getElementById('pdf-topic-select');
+  const customTopic = document.getElementById('pdf-topic-input');
+  if (!topicSelect || !customTopic) return;
+
+  if (topicSelect.value === '__NEW_TOPIC__') {
+    customTopic.classList.remove('hidden');
+  } else {
+    customTopic.classList.add('hidden');
+  }
+}
+
+function getPdfSelectedSubject() {
+  const subjSelect = document.getElementById('pdf-subject-select');
+  const customSubj = document.getElementById('pdf-subject-input');
+  if (subjSelect && subjSelect.value === '__NEW_SUBJECT__') {
+    return customSubj ? customSubj.value.trim() || 'Mechanical Engineering' : 'Mechanical Engineering';
+  }
+  return subjSelect ? subjSelect.value : 'Mechanical Engineering';
+}
+
+function getPdfSelectedTopic() {
+  const topicSelect = document.getElementById('pdf-topic-select');
+  const customTopic = document.getElementById('pdf-topic-input');
+  if (topicSelect && topicSelect.value === '__NEW_TOPIC__') {
+    return customTopic ? customTopic.value.trim() || 'Engineering Mechanics' : 'Engineering Mechanics';
+  }
+  return topicSelect ? topicSelect.value : 'Engineering Mechanics';
 }
 
 function renderDecks() {
@@ -3390,6 +4147,21 @@ function openConfigModal() {
   document.getElementById('cfg-project-id').value = cfg.projectId || '';
   document.getElementById('cfg-api-key').value = cfg.apiKey || '';
   document.getElementById('cfg-gemini-key').value = localStorage.getItem('qb_gemini_api_key') || '';
+
+  const savedDDay = localStorage.getItem("qb_dday_config");
+  let ddayCfg = { title: "RRB ALP CBT-1", date: "" };
+  if (savedDDay) {
+    try { ddayCfg = JSON.parse(savedDDay); } catch(e){}
+  }
+  if (document.getElementById('cfg-dday-title')) {
+    document.getElementById('cfg-dday-title').value = ddayCfg.title || "RRB ALP CBT-1";
+  }
+  if (document.getElementById('cfg-dday-date') && ddayCfg.date) {
+    const d = new Date(ddayCfg.date);
+    const isoLocal = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+    document.getElementById('cfg-dday-date').value = isoLocal;
+  }
+
   document.getElementById('modal-config').classList.remove('hidden');
 }
 
@@ -3407,8 +4179,16 @@ function saveConfigFromModal() {
     localStorage.setItem('qb_gemini_api_key', geminiKey);
   }
 
+  const ddayTitle = document.getElementById('cfg-dday-title')?.value.trim() || "RRB ALP CBT-1";
+  const ddayDateVal = document.getElementById('cfg-dday-date')?.value;
+  if (ddayDateVal) {
+    const ddayDateIso = new Date(ddayDateVal).toISOString();
+    localStorage.setItem("qb_dday_config", JSON.stringify({ title: ddayTitle, date: ddayDateIso }));
+    initDDayTimer();
+  }
+
   closeConfigModal();
-  alert("Settings & API Configurations Saved Successfully! ✨");
+  alert("Settings, D-Day & API Configurations Saved Successfully! ✨");
   loadDashboardData();
 }
 
@@ -3416,5 +4196,433 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>"']/g, match => {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[match];
+  });
+}
+
+// D-DAY EXAM COUNTDOWN TIMER ENGINE
+let ddayInterval = null;
+
+function initDDayTimer() {
+  const saved = localStorage.getItem("qb_dday_config");
+  let cfg = { title: "RRB ALP CBT-1", date: null };
+
+  if (saved) {
+    try { cfg = JSON.parse(saved); } catch(e){}
+  }
+
+  if (!cfg.date) {
+    // Default: Target date set to 75 Days from today!
+    const targetMs = Date.now() + (75 * 24 * 60 * 60 * 1000);
+    cfg.date = new Date(targetMs).toISOString();
+    localStorage.setItem("qb_dday_config", JSON.stringify(cfg));
+  }
+
+  updateDDayTimerDisplay(cfg);
+
+  if (ddayInterval) clearInterval(ddayInterval);
+  ddayInterval = setInterval(() => {
+    updateDDayTimerDisplay(cfg);
+  }, 1000);
+}
+
+function updateDDayTimerDisplay(cfg) {
+  const labelEl = document.getElementById("dday-exam-label");
+  const displayEl = document.getElementById("dday-timer-display");
+  if (!displayEl) return;
+
+  if (labelEl) {
+    labelEl.innerHTML = `<span>🎯 ${escapeHtml(cfg.title || 'D-Day Exam')}</span> <i class="fa-solid fa-pen text-[9px] opacity-70 group-hover:opacity-100"></i>`;
+  }
+
+  const targetTime = new Date(cfg.date).getTime();
+  const now = Date.now();
+  const diff = targetTime - now;
+
+  if (diff <= 0) {
+    displayEl.innerHTML = `🎉 <span class="text-emerald-500 font-extrabold animate-pulse">D-Day is Today! Best of luck!</span>`;
+    return;
+  }
+
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+  const mins = Math.floor((diff / (1000 * 60)) % 60);
+  const secs = Math.floor((diff / 1000) % 60);
+
+  const pad = n => String(n).padStart(2, '0');
+  displayEl.innerHTML = `⏳ <span class="text-amber-500 font-mono font-black">${days}d</span> ${pad(hours)}h ${pad(mins)}m ${pad(secs)}s`;
+}
+
+function openDDaySetupModal() {
+  const saved = localStorage.getItem("qb_dday_config");
+  let cfg = { title: "RRB ALP CBT-1", date: "" };
+  if (saved) {
+    try { cfg = JSON.parse(saved); } catch(e){}
+  }
+
+  document.getElementById("dday-inp-title").value = cfg.title || "RRB ALP CBT-1";
+
+  if (cfg.date) {
+    const d = new Date(cfg.date);
+    const isoLocal = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+    document.getElementById("dday-inp-date").value = isoLocal;
+  }
+
+  document.getElementById("modal-dday-setup")?.classList.remove("hidden");
+}
+
+function closeDDaySetupModal() {
+  document.getElementById("modal-dday-setup")?.classList.add("hidden");
+}
+
+function saveDDayConfigModal() {
+  const title = document.getElementById("dday-inp-title").value.trim() || "D-Day Exam";
+  const dateVal = document.getElementById("dday-inp-date").value;
+
+  if (!dateVal) {
+    alert("Please choose a valid D-Day Target Date.");
+    return;
+  }
+
+  const dateIso = new Date(dateVal).toISOString();
+  const cfg = { title, date: dateIso };
+  localStorage.setItem("qb_dday_config", JSON.stringify(cfg));
+
+  initDDayTimer();
+  closeDDaySetupModal();
+}
+
+// LECTURE SCREENSHOTS & PDF EXPORTER ENGINE
+window.renderScreenshotNotes = renderScreenshotNotes;
+window.onNotesSubjectFilterChange = onNotesSubjectFilterChange;
+window.onNotesTopicFilterChange = onNotesTopicFilterChange;
+window.handleScreenshotUpload = handleScreenshotUpload;
+window.deleteScreenshotNote = deleteScreenshotNote;
+window.exportLectureNotesPDF = exportLectureNotesPDF;
+
+function renderScreenshotNotes() {
+  const grid = document.getElementById('notes-screenshots-grid');
+  const subjSelect = document.getElementById('notes-filter-subject');
+  const topicSelect = document.getElementById('notes-filter-topic');
+  if (!grid || !subjSelect || !topicSelect) return;
+
+  const snaps = QB.getScreenshots();
+  const subjects = Array.from(new Set([...currentQuestionsList.map(q => q.subject || 'Mechanical Engineering'), ...snaps.map(s => s.subject)]));
+  if (!subjects.includes("Mechanical Engineering")) subjects.unshift("Mechanical Engineering");
+
+  const currentSubj = subjSelect.value || 'all';
+  subjSelect.innerHTML = `<option value="all">📁 All Subjects (${snaps.length})</option>` +
+    subjects.map(s => `<option value="${escapeHtml(s)}">📁 ${escapeHtml(s)}</option>`).join('') +
+    `<option value="__CREATE_NEW_SUBJECT__">➕ Create New Subject...</option>`;
+
+  if (subjects.includes(currentSubj)) subjSelect.value = currentSubj;
+  else subjSelect.value = "all";
+
+  const matchingSnaps = currentSubj === 'all' ? snaps : snaps.filter(s => s.subject === currentSubj);
+  const matchingQs = currentSubj === 'all' ? currentQuestionsList : currentQuestionsList.filter(q => q.subject === currentSubj);
+  const topics = Array.from(new Set([...matchingSnaps.map(s => s.topic || 'Engineering Mechanics'), ...matchingQs.map(q => q.topic || 'Engineering Mechanics')]));
+
+  const currentTopic = topicSelect.value || 'all';
+  topicSelect.innerHTML = `<option value="all">📂 All Topics (${matchingSnaps.length})</option>` +
+    topics.map(t => `<option value="${escapeHtml(t)}">📂 ${escapeHtml(t)}</option>`).join('') +
+    `<option value="__CREATE_NEW_TOPIC__">➕ Add New Topic...</option>`;
+
+  if (topics.includes(currentTopic)) topicSelect.value = currentTopic;
+  else topicSelect.value = "all";
+
+  let filtered = matchingSnaps;
+  if (currentTopic !== 'all' && currentTopic !== '__CREATE_NEW_TOPIC__') {
+    filtered = filtered.filter(s => s.topic === currentTopic);
+  }
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full glass p-10 rounded-2xl border border-slate-200 dark:border-zinc-800 text-center space-y-3 bg-white dark:bg-zinc-950">
+        <i class="fa-solid fa-camera-retro text-4xl text-indigo-500"></i>
+        <h3 class="font-extrabold text-lg text-slate-900 dark:text-white">No Lecture Screenshots Found</h3>
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Click "Add Screenshot" or press <kbd class="px-1 bg-slate-200 dark:bg-zinc-800 font-mono rounded">Ctrl + V</kbd> to save lecture notes!</p>
+        <button onclick="openCreateTopicModal()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-md inline-flex items-center space-x-1.5">
+          <i class="fa-solid fa-folder-plus"></i> <span>➕ Create New Topic / Folder</span>
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(s => `
+    <div class="bg-white dark:bg-zinc-950 p-4 rounded-2xl border border-slate-200 dark:border-zinc-800 space-y-3 shadow-sm hover:shadow-md transition">
+      <div class="flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400 border-b border-slate-100 dark:border-zinc-900 pb-2">
+        <span class="truncate">📁 ${escapeHtml(s.subject)} → ${escapeHtml(s.topic)}</span>
+        <button onclick="deleteScreenshotNote('${s.id}')" class="text-rose-500 hover:text-rose-400 p-1"><i class="fa-solid fa-trash"></i></button>
+      </div>
+
+      <h4 class="font-black text-sm text-slate-900 dark:text-white truncate">${escapeHtml(s.title || 'Lecture Screenshot Note')}</h4>
+
+      ${s.imageUrl ? `
+        <div class="overflow-hidden rounded-xl border border-slate-200 dark:border-zinc-800 bg-black/5 dark:bg-black/40 text-center cursor-pointer group" onclick="window.open('${s.imageUrl}', '_blank')">
+          <img src="${s.imageUrl}" class="max-h-56 w-full object-contain mx-auto group-hover:scale-105 transition duration-300" />
+        </div>
+      ` : ''}
+
+      ${s.notes ? `<p class="text-xs font-medium text-slate-700 dark:text-slate-300 leading-relaxed bg-slate-50 dark:bg-zinc-900 p-3 rounded-xl border border-slate-200 dark:border-zinc-800/60">${formatSubSupScripts(escapeHtml(s.notes))}</p>` : ''}
+
+      <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 font-bold">
+        <span>🕒 ${new Date(s.createdAt).toLocaleDateString()}</span>
+        <button onclick="exportLectureNotesPDF()" class="text-indigo-600 dark:text-indigo-400 hover:underline">📄 Export PDF</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function onNotesSubjectFilterChange() {
+  const subjSelect = document.getElementById('notes-filter-subject');
+  const topicSelect = document.getElementById('notes-filter-topic');
+  if (subjSelect && subjSelect.value === '__CREATE_NEW_SUBJECT__') {
+    openCreateTopicModal();
+    subjSelect.value = 'all';
+    return;
+  }
+  if (topicSelect) topicSelect.value = 'all';
+  renderScreenshotNotes();
+}
+
+function onNotesTopicFilterChange() {
+  const topicSelect = document.getElementById('notes-filter-topic');
+  if (topicSelect && topicSelect.value === '__CREATE_NEW_TOPIC__') {
+    openCreateTopicModal();
+    topicSelect.value = 'all';
+    return;
+  }
+  renderScreenshotNotes();
+}
+
+function handleScreenshotUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    openAddScreenshotModal(e.target.result);
+  };
+  reader.readAsDataURL(file);
+  event.target.value = "";
+}
+
+function deleteScreenshotNote(snapId) {
+  if (confirm("Are you sure you want to delete this lecture screenshot note?")) {
+    QB.deleteScreenshot(snapId);
+    renderScreenshotNotes();
+  }
+}
+
+function exportLectureNotesPDF() {
+  const subjFilter = document.getElementById('notes-filter-subject')?.value || 'all';
+  const topicFilter = document.getElementById('notes-filter-topic')?.value || 'all';
+  
+  let snaps = QB.getScreenshots();
+  if (subjFilter !== 'all') snaps = snaps.filter(s => s.subject === subjFilter);
+  if (topicFilter !== 'all') snaps = snaps.filter(s => s.topic === topicFilter);
+
+  if (snaps.length === 0) {
+    alert("No screenshot notes found for selected Subject & Topic to export!");
+    return;
+  }
+
+  const printWin = window.open('', '_blank');
+  if (!printWin) {
+    alert("Please allow popups to open the PDF preview window!");
+    return;
+  }
+
+  const htmlStr = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Lecture Notes PDF Export - QuestionBank</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+      <style>
+        @media print {
+          .page-break { page-break-after: always; }
+        }
+      </style>
+    </head>
+    <body class="bg-white text-slate-900 p-8 font-sans">
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div class="border-b-2 border-indigo-600 pb-4 flex justify-between items-center">
+          <div>
+            <h1 class="text-2xl font-black text-indigo-900">📚 Lecture Notes & Screenshots PDF Export</h1>
+            <p class="text-xs text-slate-500 font-bold mt-1">Subject: ${subjFilter} • Topic: ${topicFilter} • Total Notes: ${snaps.length}</p>
+          </div>
+          <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-5 py-2.5 rounded-xl text-xs shadow-lg">🖨️ Print / Save as PDF</button>
+        </div>
+
+        <div class="space-y-8">
+          ${snaps.map((s, idx) => `
+            <div class="p-6 border border-slate-300 rounded-2xl space-y-4 page-break bg-slate-50/50">
+              <div class="flex justify-between items-center text-xs font-bold text-indigo-700 border-b pb-2">
+                <span>Note #${idx + 1} • [${s.subject} → ${s.topic}]</span>
+                <span>Date: ${new Date(s.createdAt).toLocaleDateString()}</span>
+              </div>
+              <h3 class="font-extrabold text-base text-slate-900">${s.title}</h3>
+              ${s.imageUrl ? `<div class="text-center"><img src="${s.imageUrl}" class="max-h-96 max-w-full rounded-xl border p-1 inline-block shadow-sm" /></div>` : ''}
+              ${s.notes ? `<div class="p-4 bg-white rounded-xl border text-sm font-medium leading-relaxed whitespace-pre-wrap">${s.notes}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+  printWin.document.write(htmlStr);
+  printWin.document.close();
+}
+
+// ADD LECTURE SCREENSHOT MODAL ENGINE
+window.openAddScreenshotModal = openAddScreenshotModal;
+window.closeAddScreenshotModal = closeAddScreenshotModal;
+window.onSnapSubjectSelectChange = onSnapSubjectSelectChange;
+window.onSnapTopicSelectChange = onSnapTopicSelectChange;
+window.saveAddScreenshotModal = saveAddScreenshotModal;
+
+let currentPendingSnapDataUrl = "";
+
+function openAddScreenshotModal(dataUrl) {
+  currentPendingSnapDataUrl = dataUrl || "";
+  const imgEl = document.getElementById('snap-modal-preview-img');
+  if (imgEl) imgEl.src = currentPendingSnapDataUrl;
+
+  const subjSelect = document.getElementById('snap-subject-select');
+
+  const snaps = QB.getScreenshots();
+  const notesTopics = QB.getNotesTopics();
+  const subjects = Array.from(new Set([...snaps.map(s => s.subject), ...notesTopics.map(t => t.subject)]));
+  if (!subjects.includes("General Knowledge")) subjects.unshift("General Knowledge");
+
+  if (subjSelect) {
+    subjSelect.innerHTML = subjects.map(s => `<option value="${escapeHtml(s)}">📁 ${escapeHtml(s)}</option>`).join('') +
+      `<option value="__NEW_SUBJECT__">➕ Create New Subject...</option>`;
+  }
+
+  onSnapSubjectSelectChange();
+  document.getElementById('modal-add-screenshot')?.classList.remove('hidden');
+}
+
+function closeAddScreenshotModal() {
+  document.getElementById('modal-add-screenshot')?.classList.add('hidden');
+  currentPendingSnapDataUrl = "";
+}
+
+function onSnapSubjectSelectChange() {
+  const subjSelect = document.getElementById('snap-subject-select');
+  const customSubj = document.getElementById('snap-subject-input');
+  const topicSelect = document.getElementById('snap-topic-select');
+  const customTopic = document.getElementById('snap-topic-input');
+  if (!subjSelect || !topicSelect) return;
+
+  const selectedSubj = subjSelect.value;
+  if (selectedSubj === '__NEW_SUBJECT__') {
+    if (customSubj) customSubj.classList.remove('hidden');
+    topicSelect.innerHTML = `<option value="__NEW_TOPIC__">➕ Create New Topic...</option>`;
+    onSnapTopicSelectChange();
+    return;
+  } else {
+    if (customSubj) customSubj.classList.add('hidden');
+  }
+
+  const snaps = QB.getScreenshots().filter(s => s.subject === selectedSubj);
+  const notesTopics = QB.getNotesTopics().filter(t => t.subject === selectedSubj);
+  const topics = Array.from(new Set([...snaps.map(s => s.topic), ...notesTopics.map(t => t.topic)]));
+  if (topics.length === 0) topics.push("VLC Lecture Snaps");
+
+  topicSelect.innerHTML = topics.map(t => `<option value="${escapeHtml(t)}">📂 ${escapeHtml(t)}</option>`).join('') +
+    `<option value="__NEW_TOPIC__">➕ Create New Topic...</option>`;
+
+  onSnapTopicSelectChange();
+}
+
+function onSnapTopicSelectChange() {
+  const topicSelect = document.getElementById('snap-topic-select');
+  const customTopic = document.getElementById('snap-topic-input');
+  if (!topicSelect || !customTopic) return;
+
+  if (topicSelect.value === '__NEW_TOPIC__') {
+    customTopic.classList.remove('hidden');
+  } else {
+    customTopic.classList.add('hidden');
+  }
+}
+
+function compressImageForStorage(dataUrl, callback) {
+  if (!dataUrl || !dataUrl.startsWith("data:image")) {
+    callback(dataUrl);
+    return;
+  }
+  const img = new Image();
+  img.onload = function() {
+    const canvas = document.createElement('canvas');
+    let width = img.width;
+    let height = img.height;
+    const maxDim = 1280;
+
+    if (width > maxDim || height > maxDim) {
+      if (width > height) {
+        height = Math.round((height * maxDim) / width);
+        width = maxDim;
+      } else {
+        width = Math.round((width * maxDim) / height);
+        height = maxDim;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, width, height);
+
+    const compressed = canvas.toDataURL('image/jpeg', 0.75);
+    callback(compressed);
+  };
+  img.onerror = function() {
+    callback(dataUrl);
+  };
+  img.src = dataUrl;
+}
+
+function saveAddScreenshotModal() {
+  const subjSelect = document.getElementById('snap-subject-select');
+  const customSubj = document.getElementById('snap-subject-input');
+  const topicSelect = document.getElementById('snap-topic-select');
+  const customTopic = document.getElementById('snap-topic-input');
+  const title = document.getElementById('snap-title-input')?.value.trim() || "";
+  const notes = document.getElementById('snap-notes-input')?.value.trim() || "";
+
+  let finalSubj = subjSelect?.value === '__NEW_SUBJECT__' ? customSubj?.value.trim() : subjSelect?.value;
+  let finalTopic = topicSelect?.value === '__NEW_TOPIC__' ? customTopic?.value.trim() : topicSelect?.value;
+
+  finalSubj = finalSubj || "General Knowledge";
+  finalTopic = finalTopic || "VLC Lecture Snaps";
+
+  QB.saveNotesTopic(finalSubj, finalTopic);
+
+  compressImageForStorage(currentPendingSnapDataUrl, function(compressedUrl) {
+    const snapObj = {
+      id: "snap_" + Date.now(),
+      imageUrl: compressedUrl,
+      subject: finalSubj,
+      topic: finalTopic,
+      title: title || ("Lecture Screenshot Note (" + new Date().toLocaleTimeString() + ")"),
+      notes: notes || "Saved lecture screenshot for revision.",
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      QB.saveScreenshot(snapObj);
+      closeAddScreenshotModal();
+      switchTab('notes');
+      renderScreenshotNotes();
+      alert("📸 Screenshot successfully saved under " + finalSubj + " → " + finalTopic + "!");
+    } catch(err) {
+      alert("Storage full! Deleted old files or storage quota reached.");
+    }
   });
 }

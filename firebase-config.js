@@ -58,10 +58,13 @@ QB.fetchQuestions = async function(includeDeleted = false) {
       });
     } catch (err) {
       console.warn("Firestore fetch error, reading local backup:", err);
-      allQuestions = getLocalQuestions();
     }
-  } else {
+  }
+
+  if (!allQuestions || allQuestions.length === 0) {
     allQuestions = getLocalQuestions();
+  } else {
+    saveLocalQuestions(allQuestions);
   }
 
   // Auto-purge items that have been in Recycle Bin for > 30 days
@@ -77,9 +80,14 @@ QB.fetchQuestions = async function(includeDeleted = false) {
 function getLocalQuestions() {
   const local = localStorage.getItem("qb_local_questions");
   if (local) {
-    try { return JSON.parse(local); } catch(e){}
+    try {
+      const parsed = JSON.parse(local);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch(e){}
   }
-  return QB.getMockQuestions();
+  const mock = QB.getMockQuestions();
+  saveLocalQuestions(mock);
+  return mock;
 }
 
 function saveLocalQuestions(questions) {
@@ -120,6 +128,7 @@ QB.saveQuestion = async function(questionData) {
     srsRepetition: questionData.srsRepetition || 0,
     srsEaseFactor: questionData.srsEaseFactor || 2.5,
     nextReviewDate: questionData.nextReviewDate || new Date().toISOString(),
+    userNote: questionData.userNote || "",
     deleted: questionData.deleted || false,
     deletedAt: questionData.deletedAt || null,
     expiresAt: questionData.expiresAt || null
@@ -274,6 +283,25 @@ QB.updateQuestionStatus = async function(questionId, newStatus, selectedIdx = nu
   }
 };
 
+QB.updateQuestionNote = async function(questionId, noteText) {
+  noteText = noteText ? noteText.trim() : "";
+
+  if (QB.db) {
+    try {
+      await QB.db.collection("questions").doc(questionId).update({ userNote: noteText });
+    } catch (err) {
+      console.warn("Firestore update note error:", err);
+    }
+  }
+
+  const questions = getLocalQuestions();
+  const q = questions.find(item => item.id === questionId);
+  if (q) {
+    q.userNote = noteText;
+    saveLocalQuestions(questions);
+  }
+};
+
 QB.recordDailyAttempt = function(isCorrect) {
   const today = new Date().toISOString().split('T')[0];
   const reports = QB.getDailyReports();
@@ -336,6 +364,82 @@ QB.isSRSQuestionDue = function(q) {
   return new Date(q.nextReviewDate) <= new Date();
 };
 
+QB.getScreenshots = function() {
+  const raw = localStorage.getItem("qb_local_screenshots");
+  if (raw) {
+    try { return JSON.parse(raw); } catch(e){}
+  }
+  return [];
+};
+
+QB.saveScreenshot = function(snapData) {
+  const snaps = QB.getScreenshots();
+  const obj = {
+    id: snapData.id || "snap_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
+    imageUrl: snapData.imageUrl || "",
+    subject: snapData.subject || "Mechanical Engineering",
+    topic: snapData.topic || "Engineering Mechanics",
+    subfolder: snapData.subfolder || "Lecture Snaps",
+    title: snapData.title || "Lecture Screenshot Note",
+    notes: snapData.notes || "",
+    createdAt: snapData.createdAt || new Date().toISOString()
+  };
+  snaps.unshift(obj);
+  localStorage.setItem("qb_local_screenshots", JSON.stringify(snaps));
+  return obj;
+};
+
+QB.deleteScreenshot = function(snapId) {
+  let snaps = QB.getScreenshots();
+  snaps = snaps.filter(s => s.id !== snapId);
+  localStorage.setItem("qb_local_screenshots", JSON.stringify(snaps));
+};
+
+QB.getNotesTopics = function() {
+  const saved = localStorage.getItem("qb_local_notes_topics");
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch(e){}
+  }
+  const defaultNotesTopics = [
+    { subject: "General Knowledge", topic: "VLC Lecture Snaps" },
+    { subject: "Mechanical Engineering", topic: "Lecture Notes" }
+  ];
+  localStorage.setItem("qb_local_notes_topics", JSON.stringify(defaultNotesTopics));
+  return defaultNotesTopics;
+};
+
+QB.saveNotesTopic = function(subject, topic) {
+  if (!subject || !topic) return;
+  let list = QB.getNotesTopics();
+  if (!list.some(t => t.subject === subject && t.topic === topic)) {
+    list.push({ subject, topic });
+    localStorage.setItem("qb_local_notes_topics", JSON.stringify(list));
+  }
+};
+
+QB.getCustomTopics = function() {
+  const saved = localStorage.getItem("qb_custom_topics");
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e){}
+  }
+  return [];
+};
+
+QB.saveCustomTopic = function(subject, topic, subfolder) {
+  if (!subject || !topic) return;
+  let list = QB.getCustomTopics();
+  if (!list.some(t => t.subject === subject && t.topic === topic && t.subfolder === (subfolder || ""))) {
+    list.push({ subject, topic, subfolder: subfolder || "", createdAt: new Date().toISOString() });
+    localStorage.setItem("qb_custom_topics", JSON.stringify(list));
+  }
+};
+
 QB.getSRSForecast = function(questionsList) {
   const now = new Date();
   const tomorrow = new Date();
@@ -365,5 +469,25 @@ QB.getSRSForecast = function(questionsList) {
 };
 
 QB.getMockQuestions = function() {
-  return [];
+  return [
+    {
+      id: "q_mech_parallelogram_2",
+      title: "Q2. Resultant R of two forces P and Q acting at angle θ making angle α with P",
+      questionText: "If the resultant R, of two forces P and Q acting at an angle θ makes an angle α with P, then",
+      options: [
+        "tan α = P sin θ / (Q - P sin θ)",
+        "tan α = Q sin θ / (P + Q cos θ)",
+        "tan α = P sin θ / (P + Q sin θ)",
+        "tan α = P cos θ / (P + Q sin θ)"
+      ],
+      correctAnswerIndex: 1,
+      explanation: "Ans. (b) : According to law of parallelogram:\nIn ΔAEC, tan α = CE / AE = CE / (AD + DE) = (Q sin θ) / (P + Q cos θ)\nExams: RRB-JE 30.08.2019 Ist Shift, ISRO VSSC 01-07-2018, Nagaland PSC 2018 Paper-I, ISRO VSSC 06-08-2017",
+      source: "RRB-JE 30.08.2019 Ist Shift | ISRO VSSC 01-07-2018 | Nagaland PSC 2018 Paper-I | ISRO VSSC 06-08-2017",
+      status: "pending",
+      subject: "Mechanical Engineering",
+      topic: "Engineering Mechanics",
+      subfolder: "Forces & Resultants",
+      createdAt: new Date().toISOString()
+    }
+  ];
 };
