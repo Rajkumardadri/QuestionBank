@@ -162,6 +162,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.toggleAIAuditPanel = toggleAIAuditPanel;
   window.auditQuestionWithAI = auditQuestionWithAI;
   window.executeAIFixCommand = executeAIFixCommand;
+  window.undoQuestionAIEdit = undoQuestionAIEdit;
+  window.redoQuestionAIEdit = redoQuestionAIEdit;
   window.sendGeminiAIChat = sendGeminiAIChat;
   window.renderAIChatThread = renderAIChatThread;
   window.updateQuestionStatus = updateQuestionStatus;
@@ -2341,6 +2343,12 @@ function loadPracticeQuestions() {
                 <i class="fa-solid fa-robot text-violet-500"></i>
                 <span>🤖 AI Audit & Fix</span>
               </button>
+              <button onclick="undoQuestionAIEdit('${q.id}')" ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex <= 0) ? 'disabled' : ''} class="text-xs ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex <= 0) ? 'bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 cursor-not-allowed border border-slate-300 dark:border-zinc-800' : 'bg-amber-500/20 hover:bg-amber-500 text-amber-600 dark:text-amber-300 hover:text-slate-950 border border-amber-500/40 shadow-sm'} px-2 py-1 rounded-lg transition font-black" title="Undo AI Edit">
+                ↩️ Undo
+              </button>
+              <button onclick="redoQuestionAIEdit('${q.id}')" ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex >= q.history.length - 1) ? 'disabled' : ''} class="text-xs ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex >= q.history.length - 1) ? 'bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 cursor-not-allowed border border-slate-300 dark:border-zinc-800' : 'bg-indigo-500/20 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border border-indigo-500/40 shadow-sm'} px-2 py-1 rounded-lg transition font-black" title="Redo AI Edit">
+                ↪️ Redo
+              </button>
               <button onclick="openMoveQuestionModal('${q.id}')" class="text-xs bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-zinc-700 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-zinc-700 transition font-bold" title="Move Question to another folder">
                 📦 Move
               </button>
@@ -2358,7 +2366,7 @@ function loadPracticeQuestions() {
             <div class="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-2">
               <span class="text-xs font-black text-violet-600 dark:text-violet-400 flex items-center space-x-1.5">
                 <i class="fa-solid fa-robot text-violet-500"></i>
-                <span>🤖 Gemini AI Question Auditor & Command Auto-Fixer</span>
+                <span>🤖 Antigravity AI Question Auditor & Command Auto-Fixer</span>
               </span>
               <button onclick="toggleAIAuditPanel('${q.id}')" class="text-slate-400 hover:text-white text-xs font-bold">✕ Close</button>
             </div>
@@ -2369,7 +2377,7 @@ function loadPracticeQuestions() {
                 <i class="fa-solid fa-magnifying-glass"></i>
                 <span>🔍 Auto-Inspect Question for Errors</span>
               </button>
-              <span class="text-[10px] text-slate-500 font-semibold">Gemini AI will scan for missing formulas, typos & option errors</span>
+              <span class="text-[10px] text-slate-500 font-semibold">Antigravity AI will scan for missing formulas, typos & option errors</span>
             </div>
             <div id="ai-audit-result-${q.id}" class="hidden"></div>
 
@@ -2381,6 +2389,24 @@ function loadPracticeQuestions() {
                 <button onclick="executeAIFixCommand('${q.id}')" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-black transition shadow-md shrink-0 flex items-center space-x-1.5">
                   <i class="fa-solid fa-wand-magic-sparkles"></i>
                   <span>🚀 Apply AI Fix</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 3. Undo / Redo History Controls -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-zinc-800">
+              <span class="text-xs font-extrabold text-slate-600 dark:text-slate-400 flex items-center space-x-1">
+                <i class="fa-solid fa-clock-rotate-left text-indigo-500"></i>
+                <span>AI Edit History (${(typeof q.historyIndex === 'number' ? q.historyIndex : 0) + 1} / ${q.history ? q.history.length : 1}):</span>
+              </span>
+              <div class="flex space-x-2">
+                <button onclick="undoQuestionAIEdit('${q.id}')" ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex <= 0) ? 'disabled' : ''} class="px-3 py-1 rounded-xl text-xs font-black transition flex items-center space-x-1.5 ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex <= 0) ? 'bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 cursor-not-allowed border border-slate-300 dark:border-zinc-800' : 'bg-amber-500/20 hover:bg-amber-500 text-amber-700 dark:text-amber-300 hover:text-slate-950 border border-amber-500/40 shadow-sm'}" title="Undo AI Fix">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>↩️ Undo AI Fix</span>
+                </button>
+                <button onclick="redoQuestionAIEdit('${q.id}')" ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex >= q.history.length - 1) ? 'disabled' : ''} class="px-3 py-1 rounded-xl text-xs font-black transition flex items-center space-x-1.5 ${(!q.history || typeof q.historyIndex !== 'number' || q.historyIndex >= q.history.length - 1) ? 'bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 cursor-not-allowed border border-slate-300 dark:border-zinc-800' : 'bg-indigo-500/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white border border-indigo-500/40 shadow-sm'}" title="Redo AI Fix">
+                  <span>↪️ Redo AI Fix</span>
+                  <i class="fa-solid fa-rotate-right"></i>
                 </button>
               </div>
             </div>
@@ -2916,6 +2942,88 @@ Provide:
   `;
 }
 
+function pushQuestionHistory(q, editLabel = "AI Fix Edit") {
+  if (!q.history || !Array.isArray(q.history)) {
+    q.history = [];
+  }
+
+  if (q.history.length === 0) {
+    q.history.push({
+      questionText: q.questionText || "",
+      options: [...(q.options || [])],
+      correctAnswerIndex: q.correctAnswerIndex || 0,
+      explanation: q.explanation || "",
+      label: "Original Version",
+      timestamp: new Date().toISOString()
+    });
+    q.historyIndex = 0;
+  }
+
+  const currIdx = typeof q.historyIndex === 'number' ? q.historyIndex : q.history.length - 1;
+  q.history = q.history.slice(0, currIdx + 1);
+
+  q.history.push({
+    questionText: q.questionText || "",
+    options: [...(q.options || [])],
+    correctAnswerIndex: q.correctAnswerIndex || 0,
+    explanation: q.explanation || "",
+    label: editLabel,
+    timestamp: new Date().toISOString()
+  });
+
+  q.historyIndex = q.history.length - 1;
+}
+
+async function undoQuestionAIEdit(qId) {
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  if (!q.history || typeof q.historyIndex !== 'number' || q.historyIndex <= 0) {
+    alert("↩️ Already at initial question state. Nothing to undo.");
+    return;
+  }
+
+  q.historyIndex--;
+  const snapshot = q.history[q.historyIndex];
+
+  q.questionText = snapshot.questionText;
+  q.options = [...snapshot.options];
+  q.correctAnswerIndex = snapshot.correctAnswerIndex;
+  q.explanation = snapshot.explanation;
+
+  await QB.saveQuestion(q);
+  if (practiceViewMode === 'cards') loadPracticeQuestions();
+  else if (practiceViewMode === 'vertical') renderVerticalQuestions();
+  else renderQuestionsTable();
+
+  alert(`↩️ Undone! Restored: ${snapshot.label || 'Previous Version'}`);
+}
+
+async function redoQuestionAIEdit(qId) {
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  if (!q.history || typeof q.historyIndex !== 'number' || q.historyIndex >= q.history.length - 1) {
+    alert("↪️ Already at latest question state. Nothing to redo.");
+    return;
+  }
+
+  q.historyIndex++;
+  const snapshot = q.history[q.historyIndex];
+
+  q.questionText = snapshot.questionText;
+  q.options = [...snapshot.options];
+  q.correctAnswerIndex = snapshot.correctAnswerIndex;
+  q.explanation = snapshot.explanation;
+
+  await QB.saveQuestion(q);
+  if (practiceViewMode === 'cards') loadPracticeQuestions();
+  else if (practiceViewMode === 'vertical') renderVerticalQuestions();
+  else renderQuestionsTable();
+
+  alert(`↪️ Redone! Applied: ${snapshot.label || 'AI Edit'}`);
+}
+
 async function executeAIFixCommand(qId) {
   const cmdInput = document.getElementById(`ai-fix-command-${qId}`);
   const userCmd = cmdInput?.value.trim();
@@ -2926,6 +3034,9 @@ async function executeAIFixCommand(qId) {
 
   const q = currentQuestionsList.find(item => item.id === qId);
   if (!q) return;
+
+  // Record pre-edit history snapshot for instant Undo capability
+  pushQuestionHistory(q, userCmd);
 
   const resultBox = document.getElementById(`ai-audit-result-${qId}`);
   if (resultBox) {

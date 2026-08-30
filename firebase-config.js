@@ -129,6 +129,8 @@ QB.saveQuestion = async function(questionData) {
     srsEaseFactor: questionData.srsEaseFactor || 2.5,
     nextReviewDate: questionData.nextReviewDate || new Date().toISOString(),
     userNote: questionData.userNote || "",
+    history: Array.isArray(questionData.history) ? questionData.history : [],
+    historyIndex: typeof questionData.historyIndex === 'number' ? questionData.historyIndex : -1,
     deleted: questionData.deleted || false,
     deletedAt: questionData.deletedAt || null,
     expiresAt: questionData.expiresAt || null
