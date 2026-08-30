@@ -169,6 +169,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.updateQuestionStatus = updateQuestionStatus;
   window.toggleMarkForReview = toggleMarkForReview;
   window.renderQuestionsTable = renderQuestionsTable;
+  window.onParsedSubjectChange = onParsedSubjectChange;
+  window.onParsedCorrectAnswerChange = onParsedCorrectAnswerChange;
 
   // DECKS TOPIC MANAGER WINDOW EXPORTS
   window.renderDecks = renderDecks;
@@ -4053,6 +4055,81 @@ function parseRawText() {
   renderParsedPreview();
 }
 
+function autoClassifyQuestionSubjectTopic(q) {
+  const text = ((q.questionText || '') + ' ' + (q.explanation || '')).toLowerCase();
+
+  if (/money|loses|spending|average|multiples|ratio|proportion|digit|sum|percentage|fraction|speed|distance|train|work|days/i.test(text)) {
+    q.subject = "General Aptitude";
+    q.topic = "Quantitative Aptitude";
+  } else if (/fluid|viscosity|modulus|pressure|density|bernoulli|pipe|laminar|turbulent|flow/i.test(text)) {
+    q.subject = "Mechanical Engineering";
+    q.topic = "Fluid Mechanics";
+  } else if (/thermo|heat|entropy|temperature|carnot|cycle|enthalpy/i.test(text)) {
+    q.subject = "Mechanical Engineering";
+    q.topic = "Thermodynamics";
+  } else if (/voltage|current|resistor|capacitor|inductor|power|circuit/i.test(text)) {
+    q.subject = "Electrical Engineering";
+    q.topic = "Electrical Circuits";
+  }
+}
+
+function getAllAvailableSubjects() {
+  const set = new Set(currentQuestionsList.map(q => q.subject).filter(Boolean));
+  set.add("General Aptitude");
+  set.add("Mechanical Engineering");
+  set.add("Electrical Engineering");
+  set.add("Civil Engineering");
+  set.add("Computer Science");
+  return Array.from(set);
+}
+
+function getTopicsForSubject(subj) {
+  const set = new Set(currentQuestionsList.filter(q => q.subject === subj).map(q => q.topic).filter(Boolean));
+  if (subj === "General Aptitude") {
+    set.add("Quantitative Aptitude");
+    set.add("Logical Reasoning");
+    set.add("Verbal Ability");
+  } else if (subj === "Mechanical Engineering") {
+    set.add("Fluid Mechanics");
+    set.add("Thermodynamics");
+    set.add("Strength of Materials");
+    set.add("Theory of Machines");
+  }
+  return Array.from(set);
+}
+
+function getSubjectOptionsHtml(selectedSubj) {
+  const subjects = getAllAvailableSubjects();
+  return subjects.map(s => `<option value="${escapeHtml(s)}" ${s === selectedSubj ? 'selected' : ''}>📁 ${escapeHtml(s)}</option>`).join('');
+}
+
+function getTopicOptionsHtml(subj, selectedTopic) {
+  const topics = getTopicsForSubject(subj || 'General Aptitude');
+  if (selectedTopic && !topics.includes(selectedTopic)) topics.unshift(selectedTopic);
+  return topics.map(t => `<option value="${escapeHtml(t)}" ${t === selectedTopic ? 'selected' : ''}>📂 ${escapeHtml(t)}</option>`).join('');
+}
+
+function onParsedSubjectChange(idx) {
+  const subjSelect = document.getElementById(`parsed-subject-${idx}`);
+  const topicSelect = document.getElementById(`parsed-topic-${idx}`);
+  if (!subjSelect || !topicSelect) return;
+
+  const newSubj = subjSelect.value;
+  topicSelect.innerHTML = getTopicOptionsHtml(newSubj, null);
+  if (parsedPdfQuestions[idx]) {
+    parsedPdfQuestions[idx].subject = newSubj;
+    parsedPdfQuestions[idx].topic = topicSelect.value;
+  }
+}
+
+function onParsedCorrectAnswerChange(idx, val) {
+  const correctIdx = parseInt(val, 10);
+  if (parsedPdfQuestions[idx]) {
+    parsedPdfQuestions[idx].correctAnswerIndex = correctIdx;
+  }
+  renderParsedPreview();
+}
+
 function renderParsedPreview() {
   const container = document.getElementById('pdf-parsed-preview');
   const list = document.getElementById('parsed-questions-list');
@@ -4060,30 +4137,88 @@ function renderParsedPreview() {
 
   if (!container || !list) return;
 
+  // Auto classify each parsed question by keywords if subject/topic not manually assigned
+  parsedPdfQuestions.forEach(q => {
+    if (!q.subject || q.subject === 'General Subject' || q.subject === 'Mechanical Engineering') {
+      autoClassifyQuestionSubjectTopic(q);
+    }
+  });
+
   countEl.innerText = parsedPdfQuestions.length;
   container.classList.remove('hidden');
 
-  list.innerHTML = parsedPdfQuestions.map((q, idx) => `
-    <div class="bg-slate-100 dark:bg-zinc-900 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-2">
-      <div class="flex items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-bold">
-        <span>Question ${idx + 1} • Folder: [${escapeHtml(q.subject)} → ${escapeHtml(q.topic)}${q.subfolder ? ' → ' + escapeHtml(q.subfolder) : ''}]</span>
-        <span>Correct Answer: Option ${String.fromCharCode(65 + q.correctAnswerIndex)}</span>
+  list.innerHTML = parsedPdfQuestions.map((q, idx) => {
+    const currentCorrect = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0;
+    return `
+      <div class="bg-slate-100 dark:bg-zinc-900 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-3 shadow-sm text-left">
+        <div class="flex flex-wrap items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-bold border-b border-slate-200 dark:border-zinc-800 pb-2.5 gap-2">
+          <span class="font-extrabold text-slate-900 dark:text-white text-sm">Question ${idx + 1} of ${parsedPdfQuestions.length}</span>
+          
+          <!-- Interactive Correct Answer Dropdown Selector -->
+          <div class="flex items-center space-x-1.5 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
+            <span class="text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center space-x-1">
+              <i class="fa-solid fa-circle-check text-emerald-500"></i>
+              <span>Correct Answer:</span>
+            </span>
+            <select id="parsed-correct-${idx}" onchange="onParsedCorrectAnswerChange(${idx}, this.value)" class="p-1 bg-white dark:bg-black border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-lg font-black text-xs focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer">
+              <option value="0" ${currentCorrect === 0 ? 'selected' : ''}>Option A</option>
+              <option value="1" ${currentCorrect === 1 ? 'selected' : ''}>Option B</option>
+              <option value="2" ${currentCorrect === 2 ? 'selected' : ''}>Option C</option>
+              <option value="3" ${currentCorrect === 3 ? 'selected' : ''}>Option D</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Individual Subject & Topic Dropdown Selector Bar -->
+        <div class="flex flex-wrap items-center gap-2 p-2.5 bg-indigo-50/80 dark:bg-zinc-950 rounded-xl border border-indigo-500/30">
+          <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 shrink-0">📁 Target Subject & Topic for Question ${idx + 1}:</span>
+          <select id="parsed-subject-${idx}" onchange="onParsedSubjectChange(${idx})" class="p-1.5 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">
+            ${getSubjectOptionsHtml(q.subject)}
+          </select>
+          <span class="text-slate-400 font-black">/</span>
+          <select id="parsed-topic-${idx}" onchange="parsedPdfQuestions[${idx}].topic = this.value" class="p-1.5 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">
+            ${getTopicOptionsHtml(q.subject, q.topic)}
+          </select>
+        </div>
+
+        <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
+
+        <!-- Options Grid with Visual Green Highlight for Selected Correct Answer -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-900 dark:text-slate-300 font-bold pt-1">
+          ${q.options.map((opt, oIdx) => {
+            const isCorrect = (oIdx === currentCorrect);
+            return `
+              <div class="p-2.5 rounded-xl border flex items-center justify-between transition ${isCorrect ? 'border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-extrabold shadow-sm' : 'bg-white dark:bg-black border-slate-200 dark:border-zinc-800'}">
+                <span>${String.fromCharCode(65 + oIdx)}) ${formatSubSupScripts(escapeHtml(opt))}</span>
+                ${isCorrect ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">✓ Correct</span>` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <p class="text-xs text-slate-600 dark:text-slate-400 italic pt-1">Solution: ${formatSubSupScripts(escapeHtml(q.explanation))}</p>
       </div>
-      <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
-      <div class="grid grid-cols-2 gap-2 text-xs text-slate-900 dark:text-slate-300 font-bold pt-1">
-        ${q.options.map((opt, oIdx) => `<div class="bg-white dark:bg-black p-2 rounded-lg border border-slate-200 dark:border-zinc-800">${String.fromCharCode(65 + oIdx)}) ${formatSubSupScripts(escapeHtml(opt))}</div>`).join('')}
-      </div>
-      <p class="text-xs text-slate-600 dark:text-slate-400 italic pt-1">Solution: ${formatSubSupScripts(escapeHtml(q.explanation))}</p>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function saveAllParsedQuestions() {
   if (parsedPdfQuestions.length === 0) return;
-  for (const q of parsedPdfQuestions) {
+
+  for (let i = 0; i < parsedPdfQuestions.length; i++) {
+    const q = parsedPdfQuestions[i];
+    const subjEl = document.getElementById(`parsed-subject-${i}`);
+    const topicEl = document.getElementById(`parsed-topic-${i}`);
+    const correctEl = document.getElementById(`parsed-correct-${i}`);
+
+    if (subjEl && subjEl.value) q.subject = subjEl.value;
+    if (topicEl && topicEl.value) q.topic = topicEl.value;
+    if (correctEl && correctEl.value !== undefined) q.correctAnswerIndex = parseInt(correctEl.value, 10);
+
     await QB.saveQuestion(q);
   }
-  alert(`Successfully saved ${parsedPdfQuestions.length} questions to database!`);
+
+  alert(`🎉 Successfully saved ${parsedPdfQuestions.length} questions into their respective Subject & Topic folders with verified correct answers!`);
   parsedPdfQuestions = [];
   document.getElementById('pdf-parsed-preview').classList.add('hidden');
   await loadDashboardData();
