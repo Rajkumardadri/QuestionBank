@@ -2165,6 +2165,27 @@ async function clearAllQuestions() {
   }
 }
 
+function sortQuestionsBySRSSequence(questionsList) {
+  if (!Array.isArray(questionsList)) return [];
+  const now = Date.now();
+
+  return [...questionsList].sort((a, b) => {
+    const aDue = QB.isSRSQuestionDue ? QB.isSRSQuestionDue(a) : (a.nextReviewDate ? new Date(a.nextReviewDate).getTime() <= now : true);
+    const bDue = QB.isSRSQuestionDue ? QB.isSRSQuestionDue(b) : (b.nextReviewDate ? new Date(b.nextReviewDate).getTime() <= now : true);
+    if (aDue && !bDue) return -1;
+    if (!aDue && bDue) return 1;
+
+    const statusPriority = { 'needs_revision': 3, 'pending': 2, 'solved': 1 };
+    const pA = statusPriority[a.status] || 2;
+    const pB = statusPriority[b.status] || 2;
+    if (pA !== pB) return pB - pA;
+
+    const tA = a.nextReviewDate ? new Date(a.nextReviewDate).getTime() : 0;
+    const tB = b.nextReviewDate ? new Date(b.nextReviewDate).getTime() : 0;
+    return tA - tB;
+  });
+}
+
 function loadPracticeQuestions() {
   const container = document.getElementById('quiz-card-container');
   if (!container) return;
@@ -2196,6 +2217,8 @@ function loadPracticeQuestions() {
     if (sourceFilter !== 'all') {
       filteredPracticeQuestions = filteredPracticeQuestions.filter(q => q.source === sourceFilter);
     }
+
+    filteredPracticeQuestions = sortQuestionsBySRSSequence(filteredPracticeQuestions);
   }
 
   if (filteredPracticeQuestions.length === 0) {
