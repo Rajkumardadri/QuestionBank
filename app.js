@@ -159,6 +159,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.attemptHourlySpotlightQuestion = attemptHourlySpotlightQuestion;
   window.toggleSolutionVisibility = toggleSolutionVisibility;
   window.generateGeminiHinglishSolution = generateGeminiHinglishSolution;
+  window.toggleAIAuditPanel = toggleAIAuditPanel;
+  window.auditQuestionWithAI = auditQuestionWithAI;
+  window.executeAIFixCommand = executeAIFixCommand;
+  window.sendGeminiAIChat = sendGeminiAIChat;
+  window.renderAIChatThread = renderAIChatThread;
   window.updateQuestionStatus = updateQuestionStatus;
   window.toggleMarkForReview = toggleMarkForReview;
   window.renderQuestionsTable = renderQuestionsTable;
@@ -2332,6 +2337,10 @@ function loadPracticeQuestions() {
               <button onclick="toggleSolutionVisibility('${q.id}')" class="text-xs bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white px-2.5 py-1 rounded-lg border border-indigo-500/30 transition font-bold">
                 💡 Solution
               </button>
+              <button onclick="toggleAIAuditPanel('${q.id}')" class="text-xs bg-violet-600/20 text-violet-600 dark:text-violet-400 hover:bg-violet-600 hover:text-white px-2.5 py-1 rounded-lg border border-violet-500/30 transition font-black flex items-center space-x-1" title="🤖 Gemini AI Question Auditor & Auto-Fixer">
+                <i class="fa-solid fa-robot text-violet-500"></i>
+                <span>🤖 AI Audit & Fix</span>
+              </button>
               <button onclick="openMoveQuestionModal('${q.id}')" class="text-xs bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-zinc-700 px-2.5 py-1 rounded-lg border border-slate-300 dark:border-zinc-700 transition font-bold" title="Move Question to another folder">
                 📦 Move
               </button>
@@ -2341,6 +2350,39 @@ function loadPracticeQuestions() {
               <button onclick="deleteQuestion('${q.id}')" class="text-xs bg-rose-600/20 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white px-2 py-1 rounded-lg border border-rose-500/30 transition font-bold" title="Move Question to 30-Day Recycle Bin">
                 🗑️
               </button>
+            </div>
+          </div>
+
+          <!-- GEMINI AI QUESTION AUDITOR & COMMAND AUTO-FIXER PANEL -->
+          <div id="ai-audit-panel-${q.id}" class="hidden p-4 bg-slate-100 dark:bg-zinc-950 rounded-2xl border border-violet-500/40 space-y-3 my-3 shadow-lg text-left">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-zinc-800 pb-2">
+              <span class="text-xs font-black text-violet-600 dark:text-violet-400 flex items-center space-x-1.5">
+                <i class="fa-solid fa-robot text-violet-500"></i>
+                <span>🤖 Gemini AI Question Auditor & Command Auto-Fixer</span>
+              </span>
+              <button onclick="toggleAIAuditPanel('${q.id}')" class="text-slate-400 hover:text-white text-xs font-bold">✕ Close</button>
+            </div>
+
+            <!-- 1. Audit / Inspect Button -->
+            <div class="flex items-center space-x-2">
+              <button onclick="auditQuestionWithAI('${q.id}')" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shadow-md">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>🔍 Auto-Inspect Question for Errors</span>
+              </button>
+              <span class="text-[10px] text-slate-500 font-semibold">Gemini AI will scan for missing formulas, typos & option errors</span>
+            </div>
+            <div id="ai-audit-result-${q.id}" class="hidden"></div>
+
+            <!-- 2. Command AI to Fix / Edit Question Textbox -->
+            <div class="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-2">
+              <label class="block text-xs font-extrabold text-slate-700 dark:text-slate-300">✨ Command AI to Fix / Rewrite Question:</label>
+              <div class="flex items-center space-x-2">
+                <input type="text" id="ai-fix-command-${q.id}" onkeydown="if(event.key==='Enter') executeAIFixCommand('${q.id}')" placeholder="e.g. Is question me missing formula add do, Option B fix do, or KaTeX format do..." class="flex-1 p-2.5 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-violet-500">
+                <button onclick="executeAIFixCommand('${q.id}')" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-4 py-2.5 rounded-xl text-xs font-black transition shadow-md shrink-0 flex items-center space-x-1.5">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i>
+                  <span>🚀 Apply AI Fix</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2380,7 +2422,7 @@ function loadPracticeQuestions() {
             <div class="flex items-center justify-between text-indigo-600 dark:text-indigo-400 font-extrabold text-sm">
               <span class="flex items-center space-x-2">
                 <i class="fa-solid fa-lightbulb text-amber-500"></i>
-                <span>Detailed Solution & Concept Note</span>
+                <span>Solution & Interactive Gemini AI Tutor</span>
               </span>
               <button onclick="generateGeminiHinglishSolution('${q.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shadow-md">
                 <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
@@ -2390,7 +2432,34 @@ function loadPracticeQuestions() {
 
             <div id="ai-gemini-sol-container-${q.id}"></div>
 
-            <div class="text-xs text-slate-900 dark:text-white font-bold leading-relaxed font-mono whitespace-pre-wrap bg-white dark:bg-black p-4 rounded-xl border border-slate-200 dark:border-zinc-800">${cleanSol}</div>
+            ${cleanSol && !cleanSol.toLowerCase().includes("testbook") ? `
+              <div class="text-xs text-slate-900 dark:text-white font-bold leading-relaxed font-mono whitespace-pre-wrap bg-white dark:bg-black p-4 rounded-xl border border-slate-200 dark:border-zinc-800">${cleanSol}</div>
+            ` : ''}
+
+            <!-- Interactive Talkative Gemini AI Chat Thread -->
+            <div class="mt-4 p-4 bg-indigo-50/70 dark:bg-zinc-950 rounded-2xl border border-indigo-500/30 space-y-3 text-left">
+              <div class="flex items-center justify-between border-b border-indigo-200 dark:border-zinc-800 pb-2">
+                <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center space-x-1.5">
+                  <i class="fa-solid fa-comments text-amber-500"></i>
+                  <span>💬 Ask Gemini AI Tutor (Follow-up Chat)</span>
+                </span>
+                <span class="text-[10px] font-mono text-slate-500">Live AI Tutor</span>
+              </div>
+
+              <!-- Chat History Area -->
+              <div id="ai-chat-thread-${q.id}" class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                ${renderAIChatThread(q)}
+              </div>
+
+              <!-- Chat Prompt Input -->
+              <div class="flex items-center space-x-2 pt-1">
+                <input type="text" id="ai-chat-input-${q.id}" onkeydown="if(event.key==='Enter') sendGeminiAIChat('${q.id}')" placeholder="💬 Ask Gemini AI (e.g. Is step 2 ki derivation detail me samjhao)..." class="flex-1 p-2 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">
+                <button onclick="sendGeminiAIChat('${q.id}')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-black transition shrink-0 flex items-center space-x-1 shadow-md">
+                  <i class="fa-solid fa-paper-plane"></i>
+                  <span>Ask AI</span>
+                </button>
+              </div>
+            </div>
 
             <div class="pt-2 border-t border-slate-200 dark:border-zinc-800 flex items-center justify-between">
               <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Update status:</span>
@@ -2718,6 +2787,217 @@ Instructions:
     // Seamless fallback to Smart Hinglish AI Formatter!
     box.innerHTML = generateSmartHinglishFallback(q);
   }
+}
+
+async function callGeminiAPI(promptText, isJsonMode = false) {
+  const firebaseCfg = QB.getFirebaseConfig();
+  let userGeminiKey = (localStorage.getItem("qb_gemini_api_key") || "").trim();
+  const keysToTry = [userGeminiKey, firebaseCfg.apiKey, "AIzaSyCw_eug46aDoSnluYLqFJE7ub89105s6k0"].filter(Boolean);
+  const modelsToTry = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"];
+
+  for (const apiKey of keysToTry) {
+    for (const modelName of modelsToTry) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+        const reqBody = { contents: [{ parts: [{ text: promptText }] }] };
+        if (isJsonMode) {
+          reqBody.generationConfig = { responseMimeType: "application/json" };
+        }
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(reqBody)
+        });
+
+        const data = await res.json();
+        if (data.error) continue;
+
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) return rawText;
+      } catch (e) {}
+    }
+  }
+  return null;
+}
+
+function toggleAIAuditPanel(qId) {
+  const panel = document.getElementById(`ai-audit-panel-${qId}`);
+  if (panel) panel.classList.toggle('hidden');
+}
+
+async function auditQuestionWithAI(qId) {
+  const resultBox = document.getElementById(`ai-audit-result-${qId}`);
+  if (!resultBox) return;
+
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  resultBox.classList.remove('hidden');
+  resultBox.innerHTML = `
+    <div class="p-3 bg-violet-50 dark:bg-violet-950/40 border border-violet-500/30 rounded-xl text-xs text-violet-700 dark:text-violet-300 font-bold flex items-center space-x-2 my-2">
+      <i class="fa-solid fa-spinner animate-spin text-base text-violet-500"></i>
+      <span>Gemini AI is inspecting question text, options, and correctness...</span>
+    </div>
+  `;
+
+  const promptText = `Inspect this Multiple Choice Question for any errors, typos, formatting bugs, unformatted mathematical formulas, or option mismatches. Return concise, friendly feedback in student Hinglish.
+
+Question Text: ${q.questionText}
+Options: ${q.options ? q.options.join(" | ") : ""}
+Correct Answer: Option ${String.fromCharCode(65 + (q.correctAnswerIndex || 0))}
+Explanation: ${q.explanation || "None"}
+
+Provide:
+1. Format Audit (Clean / Has errors)
+2. Content Audit (Clear statement or missing details)
+3. Suggested Improvements / Fix Action.`;
+
+  const feedback = await callGeminiAPI(promptText);
+  if (feedback) {
+    const formatted = formatSubSupScripts(escapeHtml(feedback)).replace(/\n/g, '<br>');
+    resultBox.innerHTML = `
+      <div class="p-3.5 bg-violet-50/90 dark:bg-zinc-900 border border-violet-500/40 rounded-xl space-y-1.5 text-xs text-slate-900 dark:text-slate-100 font-medium leading-relaxed my-2 shadow-sm text-left">
+        <div class="font-extrabold text-violet-600 dark:text-violet-400 flex items-center space-x-1.5 border-b border-violet-200 dark:border-zinc-800 pb-1.5">
+          <i class="fa-solid fa-circle-check text-emerald-500"></i>
+          <span>Gemini AI Question Inspection Audit:</span>
+        </div>
+        <div>${formatted}</div>
+      </div>
+    `;
+  } else {
+    resultBox.innerHTML = `
+      <div class="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-500/40 rounded-xl text-xs text-rose-600 dark:text-rose-400 font-bold my-2">
+        ⚠️ Gemini API limit reached or network error. Please try again.
+      </div>
+    `;
+  }
+}
+
+async function executeAIFixCommand(qId) {
+  const cmdInput = document.getElementById(`ai-fix-command-${qId}`);
+  const userCmd = cmdInput?.value.trim();
+  if (!userCmd) {
+    alert("Please enter a command for Gemini AI (e.g., 'Correct typos and format KaTeX math formulas').");
+    return;
+  }
+
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  const resultBox = document.getElementById(`ai-audit-result-${qId}`);
+  if (resultBox) {
+    resultBox.classList.remove('hidden');
+    resultBox.innerHTML = `
+      <div class="p-3 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-500/30 rounded-xl text-xs text-indigo-700 dark:text-indigo-300 font-bold flex items-center space-x-2 my-2">
+        <i class="fa-solid fa-spinner animate-spin text-base text-indigo-500"></i>
+        <span>Gemini AI is executing your command & rewriting question...</span>
+      </div>
+    `;
+  }
+
+  const promptText = `You are a Question Bank AI Editor. The user wants to update this MCQ item based on their instruction.
+
+USER INSTRUCTION: "${userCmd}"
+
+CURRENT QUESTION OBJECT:
+Question Text: ${q.questionText}
+Options: ${q.options ? JSON.stringify(q.options) : "[]"}
+Correct Answer Index: ${q.correctAnswerIndex || 0}
+Explanation: ${q.explanation || ""}
+
+INSTRUCTIONS:
+1. Apply the user's requested fixes (add missing details, correct typos, format KaTeX formulas like $...$, or change options).
+2. Return ONLY a single valid JSON object with keys:
+   - "questionText": string
+   - "options": array of 4 option strings
+   - "correctAnswerIndex": integer (0 to 3)
+   - "explanation": string (in clean step-by-step Hinglish)`;
+
+  const rawJson = await callGeminiAPI(promptText, true);
+  if (rawJson) {
+    try {
+      const cleanJsonStr = rawJson.replace(/```json/g, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanJsonStr);
+
+      if (parsed.questionText) q.questionText = parsed.questionText;
+      if (Array.isArray(parsed.options) && parsed.options.length >= 4) q.options = parsed.options.slice(0, 4);
+      if (typeof parsed.correctAnswerIndex === 'number') q.correctAnswerIndex = parsed.correctAnswerIndex;
+      if (parsed.explanation) q.explanation = parsed.explanation;
+
+      await QB.saveQuestion(q);
+      if (practiceViewMode === 'cards') loadPracticeQuestions();
+      else if (practiceViewMode === 'vertical') renderVerticalQuestions();
+      else renderQuestionsTable();
+
+      alert("🚀 Gemini AI successfully executed your command and updated the question!");
+    } catch(err) {
+      alert("AI Response parsing error. Please refine your command and try again.");
+    }
+  } else {
+    alert("Gemini API error. Please check your API key in Settings.");
+  }
+}
+
+async function sendGeminiAIChat(qId) {
+  const chatInput = document.getElementById(`ai-chat-input-${qId}`);
+  const userMsg = chatInput?.value.trim();
+  if (!userMsg) return;
+
+  const q = currentQuestionsList.find(item => item.id === qId);
+  if (!q) return;
+
+  if (!q.aiChatHistory) q.aiChatHistory = [];
+
+  q.aiChatHistory.push({ role: 'user', text: userMsg });
+  chatInput.value = '';
+
+  const threadContainer = document.getElementById(`ai-chat-thread-${qId}`);
+  if (threadContainer) threadContainer.innerHTML = renderAIChatThread(q) + `
+    <div class="p-2.5 bg-indigo-50 dark:bg-indigo-950/40 rounded-xl text-xs text-indigo-600 dark:text-indigo-400 font-bold flex items-center space-x-1.5 animate-pulse">
+      <i class="fa-solid fa-spinner animate-spin"></i>
+      <span>Gemini AI Tutor is typing...</span>
+    </div>
+  `;
+
+  const promptText = `You are a friendly, highly skilled AI Tutor in simple student-friendly Hinglish. The student is practicing an MCQ and has a follow-up question.
+
+QUESTION CONTEXT:
+Question: ${q.questionText}
+Options: ${q.options ? q.options.join(", ") : ""}
+Correct Answer: Option ${String.fromCharCode(65 + (q.correctAnswerIndex || 0))} (${q.options ? q.options[q.correctAnswerIndex || 0] : ""})
+Explanation: ${q.explanation || ""}
+
+CONVERSATION HISTORY:
+${q.aiChatHistory.map(c => `${c.role === 'user' ? 'Student' : 'AI Tutor'}: ${c.text}`).join('\n')}
+
+STUDENT'S NEW QUESTION: "${userMsg}"
+
+INSTRUCTIONS:
+1. Reply directly to the student's question in clear, encouraging Hinglish.
+2. Provide step-by-step mathematical or conceptual derivations with KaTeX math symbols ($...$).
+3. Keep explanation concise and easy to grasp.`;
+
+  const aiReply = await callGeminiAPI(promptText);
+  if (aiReply) {
+    q.aiChatHistory.push({ role: 'ai', text: aiReply });
+  } else {
+    q.aiChatHistory.push({ role: 'ai', text: '⚠️ Apologies, Gemini API is temporarily busy. Please ask again!' });
+  }
+
+  await QB.saveQuestion(q);
+  if (threadContainer) threadContainer.innerHTML = renderAIChatThread(q);
+}
+
+function renderAIChatThread(q) {
+  if (!q.aiChatHistory || q.aiChatHistory.length === 0) {
+    return `<div class="p-2.5 text-[11px] text-slate-500 dark:text-slate-400 italic">No AI tutor questions asked yet. Type your question below!</div>`;
+  }
+  return q.aiChatHistory.map(c => `
+    <div class="p-2.5 rounded-xl text-xs leading-relaxed ${c.role === 'user' ? 'bg-indigo-600 text-white font-bold ml-6 text-right' : 'bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-slate-100 font-medium mr-6 text-left shadow-sm'}">
+      <div class="text-[10px] font-black opacity-80 mb-0.5">${c.role === 'user' ? '👤 You' : '🤖 Gemini AI Tutor'}</div>
+      <div>${formatSubSupScripts(escapeHtml(c.text)).replace(/\n/g, '<br>')}</div>
+    </div>
+  `).join('');
 }
 
 async function toggleMarkForReview(qId) {
