@@ -44,6 +44,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     initDDayTimer();
   } catch(e) {}
+  try {
+    const initialTab = window.location.hash.replace('#', '') || 'dashboard';
+    switchTab(initialTab, false);
+  } catch(e) {}
 
   // GLOBAL KEYBOARD SHORTCUT: LISTEN FOR 'ESC' KEY TO DISMISS ANY MODAL OR FULL SCREEN MODE
   document.addEventListener('keydown', (e) => {
@@ -2063,19 +2067,25 @@ function filterByHierarchy(subj, top, sub) {
   else renderQuestionsTable();
 }
 
-function switchTab(tabName) {
-  ['dashboard', 'practice', 'pdf', 'decks', 'notes', 'topics'].forEach(t => {
+function switchTab(tabName, pushHistory = true) {
+  if (pushHistory && window.history && window.history.pushState) {
+    try {
+      history.pushState({ tab: tabName }, '', '#' + tabName);
+    } catch(e) {}
+  }
+
+  ['dashboard', 'practice', 'pdf', 'decks', 'topics'].forEach(t => {
     const el = document.getElementById(`tab-${t}`);
     const nav = document.getElementById(`nav-${t}`);
     if (t === tabName) {
       if (el) el.classList.remove('hidden');
       if (nav) {
-        nav.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/40";
+        nav.className = "px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center space-x-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/40 shrink-0 whitespace-nowrap";
       }
     } else {
       if (el) el.classList.add('hidden');
       if (nav) {
-        nav.className = "px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white";
+        nav.className = "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap";
       }
     }
   });
@@ -2086,12 +2096,15 @@ function switchTab(tabName) {
     else renderQuestionsTable();
   } else if (tabName === 'decks') {
     renderDecks();
-  } else if (tabName === 'notes') {
-    renderScreenshotNotes();
   } else if (tabName === 'topics') {
     renderTopicsManager();
   }
 }
+
+window.addEventListener('popstate', (e) => {
+  const tabFromState = e.state?.tab || window.location.hash.replace('#', '') || 'dashboard';
+  switchTab(tabFromState, false);
+});
 
 function renderQuestionsTable() {
   const tbody = document.getElementById('recent-questions-tbody');
@@ -3299,13 +3312,19 @@ async function updateStatsNumbersOnly() {
   if (document.getElementById('today-wrong')) document.getElementById('today-wrong').innerText = todayReport.wrongCount;
 
   // WEEKLY ACTIVITY & MASTERY CALCULATION (LAST 7 DAYS)
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const nowMs = Date.now();
+  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
-  const weeklyQuestions = currentQuestionsList.filter(q => {
+  let weeklyQuestions = currentQuestionsList.filter(q => {
     if (!q.createdAt) return true;
-    return new Date(q.createdAt) >= sevenDaysAgo;
+    const createdMs = new Date(q.createdAt).getTime();
+    if (isNaN(createdMs)) return true;
+    return (nowMs - createdMs) <= sevenDaysMs;
   });
+
+  if (weeklyQuestions.length === 0 && currentQuestionsList.length > 0) {
+    weeklyQuestions = [...currentQuestionsList];
+  }
 
   const weeklyAddedCount = weeklyQuestions.length;
   const weeklyKnownCount = weeklyQuestions.filter(q => q.status === 'solved').length;

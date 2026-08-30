@@ -119,71 +119,71 @@
 <body class="bg-white text-slate-900 dark:bg-black dark:text-white min-h-screen flex flex-col font-sans antialiased transition-colors duration-300">
 
   <!-- Navigation Bar (Full Wide Padding) -->
-  <header class="sticky top-0 z-50 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 px-4 lg:px-10 py-3 flex items-center justify-between">
-    <div class="flex items-center space-x-3 shrink-0">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-        <i class="fa-solid fa-brain text-white text-xl"></i>
+  <header class="sticky top-0 z-50 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 px-3 lg:px-6 py-2.5 flex items-center justify-between gap-2 overflow-x-auto max-w-full">
+    <div class="flex items-center space-x-2.5 shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
+        <i class="fa-solid fa-brain text-white text-base"></i>
       </div>
-      <div>
-        <h1 class="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white flex items-center space-x-1.5">
+      <div class="shrink-0">
+        <h1 class="font-extrabold text-base tracking-tight text-slate-900 dark:text-white leading-tight">
           <span>QuestionBank Hub</span>
         </h1>
-        <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Sync • Practice • Auto Decks</p>
+        <p class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Sync • Practice • Auto Decks</p>
       </div>
 
       <!-- D-DAY COUNTDOWN TIMER WIDGET -->
-      <div onclick="openDDaySetupModal()" class="cursor-pointer ml-3 px-3 py-1.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-300 dark:border-amber-500/40 transition flex items-center space-x-2 shadow-sm group" title="Click to edit D-Day Exam Target & Date">
-        <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xs font-bold shrink-0">
+      <div onclick="openDDaySetupModal()" class="hidden xl:flex cursor-pointer ml-2 px-2.5 py-1 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-300 dark:border-amber-500/40 transition items-center space-x-1.5 shadow-sm group shrink-0" title="Click to edit D-Day Exam Target & Date">
+        <div class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center text-[11px] font-bold shrink-0">
           <i class="fa-solid fa-flag-checkered animate-pulse"></i>
         </div>
         <div class="text-left">
-          <div class="text-[10px] font-black uppercase text-amber-700 dark:text-amber-400 flex items-center space-x-1" id="dday-exam-label">
+          <div class="text-[9px] font-black uppercase text-amber-700 dark:text-amber-400 flex items-center space-x-1" id="dday-exam-label">
             <span>🎯 D-Day Exam Target</span>
-            <i class="fa-solid fa-pen text-[9px] opacity-70 group-hover:opacity-100"></i>
+            <i class="fa-solid fa-pen text-[8px] opacity-70 group-hover:opacity-100"></i>
           </div>
-          <div class="text-xs font-mono font-black text-slate-900 dark:text-white tracking-wide" id="dday-timer-display">
+          <div class="text-[11px] font-mono font-black text-slate-900 dark:text-white tracking-wide" id="dday-timer-display">
             ⏳ 75d 00h 00m 00s
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Navigation Tabs -->
-    <nav class="flex flex-wrap items-center space-x-1.5 bg-slate-100 dark:bg-zinc-900 p-1.5 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-x-auto max-w-full">
-      <button onclick="switchTab('dashboard')" id="nav-dashboard" class="px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/40 shrink-0">
+    <!-- Navigation Tabs (Strictly Single Horizontal Line) -->
+    <nav class="flex items-center space-x-1 bg-slate-100 dark:bg-zinc-950 p-1 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-x-auto shrink-0 whitespace-nowrap">
+      <button onclick="switchTab('dashboard')" id="nav-dashboard" class="px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center space-x-1.5 text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-950/80 border border-indigo-200 dark:border-indigo-800/40 shrink-0 whitespace-nowrap">
         <i class="fa-solid fa-chart-pie"></i>
         <span>Dashboard</span>
       </button>
-      <button onclick="switchTab('practice')" id="nav-practice" class="px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0">
+      <button onclick="switchTab('practice')" id="nav-practice" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
         <i class="fa-solid fa-circle-play"></i>
         <span>MCQ Practice</span>
       </button>
-      <button onclick="switchTab('pdf')" id="nav-pdf" class="px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0">
+      <button onclick="switchTab('pdf')" id="nav-pdf" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
         <i class="fa-solid fa-file-pdf"></i>
         <span>PDF Extractor</span>
       </button>
-      <button onclick="switchTab('decks')" id="nav-decks" class="px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0">
+      <button onclick="switchTab('decks')" id="nav-decks" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
         <i class="fa-solid fa-layer-group"></i>
         <span>Study Decks</span>
       </button>
-      <button onclick="switchTab('topics')" id="nav-topics" class="px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center space-x-2 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0">
+      <button onclick="switchTab('topics')" id="nav-topics" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
         <i class="fa-solid fa-folder-open text-amber-500"></i>
         <span>Topics Manager</span>
       </button>
     </nav>
 
     <!-- Header Right Quick Actions -->
-    <div class="flex items-center space-x-3 shrink-0">
+    <div class="flex items-center space-x-2 shrink-0">
       <!-- Dark / Light Theme Toggle -->
-      <button onclick="toggleTheme()" id="theme-toggle-btn" class="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition flex items-center space-x-1.5" title="Toggle Dark/Light Theme">
+      <button onclick="toggleTheme()" id="theme-toggle-btn" class="p-2 rounded-xl bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition flex items-center space-x-1" title="Toggle Dark/Light Theme">
         <i class="fa-solid fa-moon text-indigo-500" id="theme-icon"></i>
-        <span class="text-xs font-extrabold hidden sm:inline" id="theme-label">Dark</span>
+        <span class="text-xs font-bold hidden sm:inline" id="theme-label">Dark</span>
       </button>
 
-      <button onclick="openConfigModal()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Settings & Recycle Bin">
+      <button onclick="openConfigModal()" class="p-2 rounded-xl bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400 transition" title="Settings & Recycle Bin">
         <i class="fa-solid fa-gear"></i>
       </button>
-      <button onclick="openTestSetupModal()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 px-4 py-2 rounded-xl text-sm font-black shadow-lg shadow-amber-500/20 flex items-center space-x-2 transition">
+      <button onclick="openTestSetupModal()" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black shadow-md shadow-amber-500/20 flex items-center space-x-1.5 transition whitespace-nowrap">
         <i class="fa-solid fa-bullseye"></i>
         <span>🎯 Timed Test</span>
       </button>
@@ -480,32 +480,36 @@
     <section id="tab-practice" class="hidden space-y-6">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 practice-non-essential-header">
         <div class="flex items-center space-x-3">
+          <button onclick="history.back()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shrink-0 shadow-sm" title="Go Back">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
           <div>
             <h2 class="font-black text-xl text-slate-900 dark:text-white">MCQ Practice Arena</h2>
             <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Testbook-style interactive test solving mode</p>
           </div>
         </div>
 
-        <!-- Sub-Option Segmented Toggle Bar with 3 View Modes + Fullscreen Button -->
-        <div class="flex flex-wrap items-center gap-3">
+        <!-- Sub-Option Segmented Toggle Bar with 3 View Modes + Fullscreen Button (Strictly Single Horizontal Row) -->
+        <div class="flex items-center space-x-2 overflow-x-auto max-w-full shrink-0">
           <!-- Fullscreen Focus Mode Button -->
-          <button onclick="toggleFullscreenPractice()" id="btn-fullscreen-toggle" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition flex items-center space-x-1.5 shadow-md">
-            <i class="fa-solid fa-expand" id="fullscreen-icon"></i>
+          <button onclick="toggleFullscreenPractice()" id="btn-fullscreen-toggle" class="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-xl text-[11px] font-extrabold transition flex items-center space-x-1 shadow-sm shrink-0 whitespace-nowrap">
+            <i class="fa-solid fa-expand text-[10px]" id="fullscreen-icon"></i>
             <span id="fullscreen-text">🖥️ Full Screen Mode</span>
           </button>
 
           <!-- 3 Sub-Option View Modes -->
-          <div class="flex items-center bg-slate-200 dark:bg-zinc-950 p-1 rounded-xl border border-slate-300 dark:border-zinc-800">
-            <button onclick="togglePracticeViewMode('cards')" id="btn-view-cards" class="px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center space-x-1.5 bg-indigo-600 text-white shadow-sm">
-              <i class="fa-solid fa-file-signature"></i>
+          <div class="flex items-center bg-slate-200 dark:bg-zinc-950 p-1 rounded-xl border border-slate-300 dark:border-zinc-800 shrink-0 whitespace-nowrap">
+            <button onclick="togglePracticeViewMode('cards')" id="btn-view-cards" class="px-2.5 py-1 rounded-lg text-[11px] font-black transition-all flex items-center space-x-1 bg-indigo-600 text-white shadow-sm shrink-0 whitespace-nowrap">
+              <i class="fa-solid fa-file-signature text-[10px]"></i>
               <span>🎯 Single Question Mode</span>
             </button>
-            <button onclick="togglePracticeViewMode('vertical')" id="btn-view-vertical" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white">
-              <i class="fa-solid fa-list-ol text-amber-500"></i>
+            <button onclick="togglePracticeViewMode('vertical')" id="btn-view-vertical" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
+              <i class="fa-solid fa-list-ol text-amber-500 text-[10px]"></i>
               <span>📜 Vertical Questions List</span>
             </button>
-            <button onclick="togglePracticeViewMode('table')" id="btn-view-table" class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white">
-              <i class="fa-solid fa-table-list text-indigo-500"></i>
+            <button onclick="togglePracticeViewMode('table')" id="btn-view-table" class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 text-slate-700 dark:text-slate-300 hover:text-black dark:hover:text-white shrink-0 whitespace-nowrap">
+              <i class="fa-solid fa-table-list text-indigo-500 text-[10px]"></i>
               <span>📋 View All Questions Table</span>
             </button>
           </div>
@@ -616,7 +620,11 @@
     <!-- 3. PDF & IMAGE EXTRACTION TAB -->
     <section id="tab-pdf" class="hidden space-y-6">
       <div class="glass p-6 rounded-2xl space-y-4 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-200 dark:border-zinc-800 pb-3">
+        <div class="flex items-center space-x-3 border-b border-slate-200 dark:border-zinc-800 pb-4">
+          <button onclick="history.back()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shrink-0 shadow-sm" title="Go Back">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
           <div>
             <h2 class="font-black text-xl flex items-center space-x-2 text-slate-900 dark:text-white">
               <i class="fa-solid fa-file-pdf text-rose-500"></i>
@@ -737,12 +745,18 @@
     <!-- 4. STUDY DECKS & NOTES TAB WITH TOPIC MANAGER & EDIT/DELETE -->
     <section id="tab-decks" class="hidden space-y-6">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-6 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-        <div>
-          <h2 class="font-black text-xl flex items-center space-x-2 text-slate-900 dark:text-white">
-            <i class="fa-solid fa-brain text-violet-500"></i>
-            <span>Topic-Wise Study Decks & Flashcards</span>
-          </h2>
-          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Organized topic-wise for active recall with Edit and Delete options</p>
+        <div class="flex items-center space-x-3">
+          <button onclick="history.back()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shrink-0 shadow-sm" title="Go Back">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
+          <div>
+            <h2 class="font-black text-xl flex items-center space-x-2 text-slate-900 dark:text-white">
+              <i class="fa-solid fa-brain text-violet-500"></i>
+              <span>Topic-Wise Study Decks & Flashcards</span>
+            </h2>
+            <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">Organized topic-wise for active recall with Edit and Delete options</p>
+          </div>
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
@@ -770,12 +784,18 @@
     <!-- 5. TOPICS MANAGER TAB -->
     <section id="tab-topics" class="hidden space-y-6">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 glass p-6 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-        <div>
-          <h2 class="font-black text-xl flex items-center space-x-2 text-slate-900 dark:text-white">
-            <i class="fa-solid fa-folder-open text-amber-500"></i>
-            <span>Topics Manager & Notes Reader</span>
-          </h2>
-          <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">View, edit, read, or organize all your study topics and question sets in one place</p>
+        <div class="flex items-center space-x-3">
+          <button onclick="history.back()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-800 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center space-x-1.5 shrink-0 shadow-sm" title="Go Back">
+            <i class="fa-solid fa-arrow-left"></i>
+            <span>Back</span>
+          </button>
+          <div>
+            <h2 class="font-black text-xl flex items-center space-x-2 text-slate-900 dark:text-white">
+              <i class="fa-solid fa-folder-open text-amber-500"></i>
+              <span>Topics Manager & Notes Reader</span>
+            </h2>
+            <p class="text-xs font-semibold text-slate-600 dark:text-slate-400">View, edit, read, or organize all your study topics and question sets in one place</p>
+          </div>
         </div>
         
         <div class="flex items-center space-x-3">
