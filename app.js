@@ -171,6 +171,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.renderQuestionsTable = renderQuestionsTable;
   window.onParsedSubjectChange = onParsedSubjectChange;
   window.onParsedCorrectAnswerChange = onParsedCorrectAnswerChange;
+  window.deleteParsedQuestion = deleteParsedQuestion;
+  window.toggleParsedEditMode = toggleParsedEditMode;
+  window.generateParsedQuestionAISolution = generateParsedQuestionAISolution;
 
   // DECKS TOPIC MANAGER WINDOW EXPORTS
   window.renderDecks = renderDecks;
@@ -4122,6 +4125,49 @@ function onParsedSubjectChange(idx) {
   }
 }
 
+function deleteParsedQuestion(idx) {
+  if (idx >= 0 && idx < parsedPdfQuestions.length) {
+    parsedPdfQuestions.splice(idx, 1);
+    renderParsedPreview();
+  }
+}
+
+function toggleParsedEditMode(idx) {
+  if (parsedPdfQuestions[idx]) {
+    parsedPdfQuestions[idx]._isEditing = !parsedPdfQuestions[idx]._isEditing;
+    renderParsedPreview();
+  }
+}
+
+async function generateParsedQuestionAISolution(idx) {
+  const q = parsedPdfQuestions[idx];
+  if (!q) return;
+
+  const statusEl = document.getElementById(`parsed-sol-status-${idx}`);
+  if (statusEl) {
+    statusEl.innerHTML = `<span class="text-indigo-600 dark:text-indigo-400 font-bold flex items-center space-x-1.5 animate-pulse"><i class="fa-solid fa-spinner animate-spin"></i> <span>Generating AI Hinglish solution...</span></span>`;
+  }
+
+  const promptText = `Analyze this multiple choice question and provide a crystal-clear, step-by-step explanation in simple, student-friendly Hinglish with KaTeX math formatting ($...$).
+
+Question Statement: ${q.questionText}
+Options: ${q.options ? q.options.join(" | ") : ""}
+Correct Answer: Option ${String.fromCharCode(65 + (q.correctAnswerIndex || 0))} (${q.options ? q.options[q.correctAnswerIndex || 0] : ""})
+
+Instructions:
+1. Explain core concept in simple Hinglish.
+2. Provide step-by-step mathematical/logical derivations.
+3. Keep line breaks clean.`;
+
+  let aiSol = await callGeminiAPI(promptText);
+  if (!aiSol) {
+    aiSol = generateAntigravityAITutorReply(q, "Explain step-by-step solution");
+  }
+
+  q.explanation = aiSol;
+  renderParsedPreview();
+}
+
 function onParsedCorrectAnswerChange(idx, val) {
   const correctIdx = parseInt(val, 10);
   if (parsedPdfQuestions[idx]) {
@@ -4137,6 +4183,11 @@ function renderParsedPreview() {
 
   if (!container || !list) return;
 
+  if (parsedPdfQuestions.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+
   // Auto classify each parsed question by keywords if subject/topic not manually assigned
   parsedPdfQuestions.forEach(q => {
     if (!q.subject || q.subject === 'General Subject' || q.subject === 'Mechanical Engineering') {
@@ -4149,23 +4200,46 @@ function renderParsedPreview() {
 
   list.innerHTML = parsedPdfQuestions.map((q, idx) => {
     const currentCorrect = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0;
+    const isEditing = !!q._isEditing;
+
     return `
-      <div class="bg-slate-100 dark:bg-zinc-900 p-4 rounded-xl border border-slate-200 dark:border-zinc-800 space-y-3 shadow-sm text-left">
+      <div class="bg-slate-100 dark:bg-zinc-900 p-4 rounded-xl border ${isEditing ? 'border-2 border-indigo-500 shadow-xl' : 'border-slate-200 dark:border-zinc-800 shadow-sm'} space-y-3 text-left transition-all">
+        
+        <!-- Header Row with Question No., Correct Answer Selector, and Action Toolbar -->
         <div class="flex flex-wrap items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-bold border-b border-slate-200 dark:border-zinc-800 pb-2.5 gap-2">
           <span class="font-extrabold text-slate-900 dark:text-white text-sm">Question ${idx + 1} of ${parsedPdfQuestions.length}</span>
           
-          <!-- Interactive Correct Answer Dropdown Selector -->
-          <div class="flex items-center space-x-1.5 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
-            <span class="text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center space-x-1">
-              <i class="fa-solid fa-circle-check text-emerald-500"></i>
-              <span>Correct Answer:</span>
-            </span>
-            <select id="parsed-correct-${idx}" onchange="onParsedCorrectAnswerChange(${idx}, this.value)" class="p-1 bg-white dark:bg-black border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-lg font-black text-xs focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer">
-              <option value="0" ${currentCorrect === 0 ? 'selected' : ''}>Option A</option>
-              <option value="1" ${currentCorrect === 1 ? 'selected' : ''}>Option B</option>
-              <option value="2" ${currentCorrect === 2 ? 'selected' : ''}>Option C</option>
-              <option value="3" ${currentCorrect === 3 ? 'selected' : ''}>Option D</option>
-            </select>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Interactive Correct Answer Dropdown Selector -->
+            <div class="flex items-center space-x-1.5 bg-emerald-500/10 dark:bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-xl">
+              <span class="text-xs font-black text-emerald-700 dark:text-emerald-300 flex items-center space-x-1">
+                <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                <span>Correct Answer:</span>
+              </span>
+              <select id="parsed-correct-${idx}" onchange="onParsedCorrectAnswerChange(${idx}, this.value)" class="p-1 bg-white dark:bg-black border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 rounded-lg font-black text-xs focus:outline-none focus:border-emerald-500 shadow-sm cursor-pointer">
+                <option value="0" ${currentCorrect === 0 ? 'selected' : ''}>Option A</option>
+                <option value="1" ${currentCorrect === 1 ? 'selected' : ''}>Option B</option>
+                <option value="2" ${currentCorrect === 2 ? 'selected' : ''}>Option C</option>
+                <option value="3" ${currentCorrect === 3 ? 'selected' : ''}>Option D</option>
+              </select>
+            </div>
+
+            <!-- Action Toolbar: Edit, AI Solution, Delete -->
+            <div class="flex items-center space-x-1.5">
+              <button onclick="toggleParsedEditMode(${idx})" class="text-xs ${isEditing ? 'bg-emerald-600 text-white font-black' : 'bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-600 hover:text-white'} px-2.5 py-1 rounded-lg border border-indigo-500/30 transition font-extrabold flex items-center space-x-1" title="Toggle Edit Question & Options">
+                <i class="fa-solid ${isEditing ? 'fa-check' : 'fa-pen-to-square'}"></i>
+                <span>${isEditing ? '✓ Done Editing' : '✏️ Edit'}</span>
+              </button>
+
+              <button onclick="generateParsedQuestionAISolution(${idx})" class="text-xs bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white px-2.5 py-1 rounded-lg transition font-black flex items-center space-x-1 shadow-sm" title="Generate Step-by-Step AI Hinglish Solution">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i>
+                <span>✨ AI Solution</span>
+              </button>
+
+              <button onclick="deleteParsedQuestion(${idx})" class="text-xs bg-rose-600/20 hover:bg-rose-600 text-rose-600 dark:text-rose-400 hover:text-white px-2.5 py-1 rounded-lg border border-rose-500/30 transition font-bold" title="Delete Question from Preview List">
+                <i class="fa-solid fa-trash"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -4181,22 +4255,58 @@ function renderParsedPreview() {
           </select>
         </div>
 
-        <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
+        <!-- Question Statement (View vs Edit Mode) -->
+        ${isEditing ? `
+          <div class="space-y-1">
+            <label class="block text-xs font-extrabold text-indigo-600 dark:text-indigo-400">✏️ Edit Question Text:</label>
+            <textarea rows="2" oninput="parsedPdfQuestions[${idx}].questionText = this.value" class="w-full p-2.5 bg-white dark:bg-black border border-indigo-500/50 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">${escapeHtml(q.questionText || '')}</textarea>
+          </div>
+        ` : `
+          <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
+        `}
 
-        <!-- Options Grid with Visual Green Highlight for Selected Correct Answer -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-900 dark:text-slate-300 font-bold pt-1">
-          ${q.options.map((opt, oIdx) => {
-            const isCorrect = (oIdx === currentCorrect);
-            return `
-              <div class="p-2.5 rounded-xl border flex items-center justify-between transition ${isCorrect ? 'border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-extrabold shadow-sm' : 'bg-white dark:bg-black border-slate-200 dark:border-zinc-800'}">
-                <span>${String.fromCharCode(65 + oIdx)}) ${formatSubSupScripts(escapeHtml(opt))}</span>
-                ${isCorrect ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">✓ Correct</span>` : ''}
-              </div>
-            `;
-          }).join('')}
+        <!-- Options Grid (View vs Edit Mode) -->
+        ${isEditing ? `
+          <div class="space-y-2 pt-1">
+            <label class="block text-xs font-extrabold text-indigo-600 dark:text-indigo-400">✏️ Edit Options (A, B, C, D):</label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${(q.options || ['','','','']).map((opt, oIdx) => `
+                <div class="flex items-center space-x-1.5 p-1 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-lg">
+                  <span class="text-xs font-black text-slate-500 px-1">${String.fromCharCode(65 + oIdx)})</span>
+                  <input type="text" value="${escapeHtml(opt || '')}" oninput="parsedPdfQuestions[${idx}].options[${oIdx}] = this.value" class="w-full p-1.5 bg-transparent text-xs font-bold text-slate-900 dark:text-white focus:outline-none">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-900 dark:text-slate-300 font-bold pt-1">
+            ${q.options.map((opt, oIdx) => {
+              const isCorrect = (oIdx === currentCorrect);
+              return `
+                <div class="p-2.5 rounded-xl border flex items-center justify-between transition ${isCorrect ? 'border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-extrabold shadow-sm' : 'bg-white dark:bg-black border-slate-200 dark:border-zinc-800'}">
+                  <span>${String.fromCharCode(65 + oIdx)}) ${formatSubSupScripts(escapeHtml(opt))}</span>
+                  ${isCorrect ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">✓ Correct</span>` : ''}
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `}
+
+        <!-- Solution & AI Generation Box -->
+        <div class="pt-2 border-t border-slate-200 dark:border-zinc-800 space-y-1">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="text-slate-500 dark:text-slate-400 italic">Solution & Explanation:</span>
+            <div id="parsed-sol-status-${idx}"></div>
+          </div>
+
+          ${isEditing ? `
+            <textarea rows="2" oninput="parsedPdfQuestions[${idx}].explanation = this.value" placeholder="✍️ Write or edit solution text..." class="w-full p-2.5 bg-white dark:bg-black border border-indigo-500/50 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">${escapeHtml(q.explanation || '')}</textarea>
+          ` : `
+            <div id="parsed-sol-display-${idx}" class="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed bg-white dark:bg-black p-3 rounded-xl border border-slate-200 dark:border-zinc-800">
+              ${formatSubSupScripts(escapeHtml(q.explanation || 'No solution added. Click ✨ AI Solution to generate.'))}
+            </div>
+          `}
         </div>
-
-        <p class="text-xs text-slate-600 dark:text-slate-400 italic pt-1">Solution: ${formatSubSupScripts(escapeHtml(q.explanation))}</p>
       </div>
     `;
   }).join('');
