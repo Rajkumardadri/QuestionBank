@@ -381,16 +381,31 @@ function formatMathSymbols(str) {
   s = s.replace(/\bgamma\b/gi, 'γ');
   s = s.replace(/\bdelta\b/gi, 'Δ');
   s = s.replace(/\bomega\b/gi, 'ω');
-  s = s.replace(/\bepsilon\b/gi, 'ε');
-  s = s.replace(/\bphi\b/gi, 'φ');
-  s = s.replace(/\blambda\b/gi, 'λ');
-
+  
   return s;
 }
 
 function formatSubSupScripts(str) {
   if (!str) return "";
-  let formatted = formatMathSymbols(str);
+
+  let formatted = str;
+
+  // Convert LaTeX math delimiters \( \) and \[ \] to $ and $$
+  formatted = formatted.replace(/\\\(|\s*\\\(\s*/g, ' $');
+  formatted = formatted.replace(/\\\)\s*|\s*\\\)/g, '$ ');
+  formatted = formatted.replace(/\\\[|\s*\\\[\s*/g, '\n$$');
+  formatted = formatted.replace(/\\\]\s*|\s*\\\]/g, '$$\n');
+
+  // Convert \text{...} LaTeX macro to clean text inside formulas
+  formatted = formatted.replace(/\\text\{([^}]+)\}/g, ' $1 ');
+
+  // Convert \frac{a}{b} LaTeX macro to clean HTML fraction
+  formatted = formatted.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="inline-flex flex-col text-center align-middle mx-1 text-[11px] font-bold"><span class="border-b border-current px-0.5">$1</span><span class="px-0.5">$2</span></span>');
+
+  // Convert markdown bold **text** to <strong>text</strong>
+  formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-black text-indigo-600 dark:text-indigo-400">$1</strong>');
+
+  formatted = formatMathSymbols(formatted);
 
   // 1. Fractional Powers (e.g. ^(1/2), ^1/2, ^(3/2))
   formatted = formatted.replace(/\^\(1\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">½</sup>');
@@ -407,27 +422,10 @@ function formatSubSupScripts(str) {
     return `${unit}${supMap[p] || p}`;
   });
 
-  // 4. Reciprocal expressions like 1x -> 1/x, 1x2 -> 1/x²
-  formatted = formatted.replace(/\b1([a-zA-Z])([2-9])?\b/g, (m, letter, p) => {
-    return p ? `1/${letter}<sup class="text-amber-600 dark:text-amber-400 font-bold">${p}</sup>` : `1/${letter}`;
-  });
-
-  // 5. Algebraic single letter powers (e.g., x2 -> x², y3 -> y³, a2 -> a²)
-  formatted = formatted.replace(/\b([a-wyzA-WYZ])([2-9])\b/g, '$1<sup class="text-amber-600 dark:text-amber-400 font-bold">$2</sup>');
-
-  // 6. Subscripts e.g., P_1, V_2, T_1, ρ_1, H_max
+  // 4. Subscripts e.g., P_1, V_2, T_1, ρ_1, H_max
   formatted = formatted.replace(/_([0-9a-zA-Z]+)/g, '<sub>$1</sub>');
 
-  // 7. Chemical / Dimensional Formulas
-  formatted = formatted.replace(/([MLTθKI])(-?\d+)/g, '$1<sup class="text-amber-600 dark:text-amber-400 font-bold">$2</sup>');
-  formatted = formatted.replace(/(H|N|O|C)2/g, '$1<sub>2</sub>');
-  formatted = formatted.replace(/(CO)2/g, '$1<sub>2</sub>');
-  formatted = formatted.replace(/\b([PVTFAv])([1-9])\b/g, '$1<sub>$2</sub>');
-  formatted = formatted.replace(/(ρ|rho)([A-Z1-9a-z])/g, '$1<sub>$2</sub>');
-
-  // 8. Clean up spaces around equals sign =
-  formatted = formatted.replace(/([a-zA-Z0-9</sup></sub>])\s*=\s*([a-zA-Z0-9</sup></sub>])/g, '$1 = $2');
-
+  // 5. Process Image Tags
   formatted = processImageTagsInHtml(formatted);
 
   return formatted;
@@ -465,6 +463,10 @@ function processImageTagsInHtml(str) {
 function cleanQuestionTextDisplay(rawStr) {
   if (!rawStr) return "";
   let str = rawStr;
+
+  // Clean stray leading numbers, parentheses, or dots from question text
+  str = str.replace(/^[0-9\s\)\.\:\-\_\/]+/, '').trim();
+  str = str.replace(/^Q(?:uestion)?[\s.#:-]*\d*[\s.:)-]*/i, '').trim();
 
   str = str.replace(/^(?:\s*|\d+%\s*answered\s*correctly|Question\s*No\.\s*\d+|Skipped|Incorrect|Unattempted|Wrong|You:|\d{2}:\d{2}|Avg:|\d{2}:\d{2}|Marks\s*[-+\d.]+|Save|Saved|Report|Reported|Text Size\s*A-?\s*A\+?|View in (?:English|Hindi))+/gi, '');
   str = str.replace(/^(?:\s*|Save|Saved|Report|Reported|\d+%\s*answered\s*correctly|Question:\s*)+/gi, '');
@@ -4497,13 +4499,15 @@ function renderParsedPreview() {
             <textarea rows="2" oninput="parsedPdfQuestions[${idx}].explanation = this.value" placeholder="✍️ Write or edit solution text..." class="w-full p-2.5 bg-white dark:bg-black border border-indigo-500/50 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">${escapeHtml(q.explanation || '')}</textarea>
           ` : `
             <div id="parsed-sol-display-${idx}" class="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed bg-white dark:bg-black p-3 rounded-xl border border-slate-200 dark:border-zinc-800">
-              ${formatSubSupScripts(escapeHtml(q.explanation || 'No solution added. Click ✨ AI Solution to generate.'))}
+              ${formatSubSupScripts(q.explanation || 'No solution added. Click ✨ AI Solution to generate.').replace(/\n/g, '<br>')}
             </div>
           `}
         </div>
       </div>
     `;
   }).join('');
+
+  setTimeout(() => triggerKaTeXAutoRender(list), 50);
 }
 
 async function saveAllParsedQuestions() {

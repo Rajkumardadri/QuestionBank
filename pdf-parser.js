@@ -108,9 +108,14 @@ function finalizeQuestion(q, sourceTag) {
     q.options.push(`Option ${String.fromCharCode(65 + q.options.length)}`);
   }
 
+  // Clean stray leading numbers, parentheses, or dots from question text
+  let cleanText = (q.questionText || "").trim();
+  cleanText = cleanText.replace(/^[0-9\s\)\.\:\-\_\/]+/, '').trim();
+  cleanText = cleanText.replace(/^Q(?:uestion)?[\s.#:-]*\d*[\s.:)-]*/i, '').trim();
+
   // Automatic Answer Safety Guard: Inspect explanation text for explicit answer letter (e.g., Ans. (b))
   let verifiedCorrectIndex = q.correctAnswerIndex;
-  const combinedText = (q.explanation + " " + q.questionText).toLowerCase();
+  const combinedText = (q.explanation + " " + cleanText).toLowerCase();
   const explicitAnsMatch = combinedText.match(/(?:ans(?:wer)?|correct\s*option)[\s.#:-]*\(?\s*([a-d1-4])\s*\)?/i);
   if (explicitAnsMatch) {
     const char = explicitAnsMatch[1].toUpperCase();
@@ -122,8 +127,8 @@ function finalizeQuestion(q, sourceTag) {
 
   return {
     id: "q_pdf_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-    title: q.questionText.substring(0, 45) + "...",
-    questionText: q.questionText,
+    title: (cleanText || "Extracted Question").substring(0, 45) + "...",
+    questionText: cleanText,
     options: q.options.slice(0, 4),
     correctAnswerIndex: verifiedCorrectIndex,
     explanation: q.explanation || "Extracted from PDF question paper.",
