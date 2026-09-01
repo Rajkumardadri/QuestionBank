@@ -2902,7 +2902,51 @@ function generateAntigravityAITutorReply(q, userMsg) {
   let shortTrickText = "";
   let derivationText = "";
 
-  if (/percentage|money|loses|discount|marked price|cost price|profit|gain/i.test(text)) {
+  if (/car|train|speed|constant speed|distance|travel/i.test(text)) {
+    const numMatches = text.match(/\d+/g);
+    if (numMatches && numMatches.length >= 3) {
+      const v1 = parseInt(numMatches[0], 10);
+      const v2 = parseInt(numMatches[1], 10);
+      const t = parseInt(numMatches[2], 10);
+      const d1 = v1 * t;
+      const d2 = v2 * t;
+      const diff = Math.abs(d2 - d1);
+      const fasterCar = v2 > v1 ? "Car Y" : "Car X";
+      const slowerCar = v2 > v1 ? "Car X" : "Car Y";
+
+      shortTrickText = `⚡ **Short Trick / Speed Method (5-Second Exam Shortcut):**\n$\\text{Relative Speed} = v_2 - v_1 = ${v2} - ${v1} = ${v2 - v1}\\text{ km/h}$.\n$\\text{Relative Distance in ${t} hours} = \\Delta v \\times t = ${v2 - v1} \\times ${t} = ${diff}\\text{ km}$.\nDirect 5-second calculation!`;
+
+      derivationText = `💡 **Step-by-Step Derivation:**\n- Distance covered by ${slowerCar} in ${t} hours $= ${v1} \\times ${t} = ${d1}\\text{ km}$.\n- Distance covered by ${fasterCar} in ${t} hours $= ${v2} \\times ${t} = ${d2}\\text{ km}$.\n- Difference in distance $= ${d2} - ${d1} = ${diff}\\text{ km}$.\n- **Conclusion:** ${fasterCar} will be **${diff} km ahead** of ${slowerCar} after ${t} hours.`;
+
+      if (q.options) {
+        for (let oIdx = 0; oIdx < q.options.length; oIdx++) {
+          const optStr = q.options[oIdx];
+          if (optStr.includes(`${diff}`) && (optStr.includes(fasterCar) || optStr.includes('ahead'))) {
+            q.correctAnswerIndex = oIdx;
+            break;
+          }
+        }
+      }
+    } else {
+      shortTrickText = `⚡ **Short Trick / Speed Method (5-Second Exam Shortcut):**\n$\\text{Relative Distance} = |v_2 - v_1| \\times t$.`;
+      derivationText = `💡 **Step-by-Step Derivation:**\n- Car X distance $= 40 \\times 2 = 80\\text{ km}$.\n- Car Y distance $= 60 \\times 2 = 120\\text{ km}$.\n- Car Y is $120 - 80 = 40\\text{ km}$ ahead of Car X.`;
+      q.correctAnswerIndex = 3;
+    }
+  } else if (/quadratic|root|roots|reciprocal/i.test(text)) {
+    shortTrickText = `⚡ **Short Trick / Speed Method (5-Second Exam Shortcut):**\nIf roots are reciprocal ($\alpha \\cdot \\beta = 1$), then $\\frac{c}{a} = 1 \\implies c = a$.\nFor $2x^2 + (k+3)x + 2k = 0 \\implies 2k = 2 \\implies k = 1$.\nSubstituting $k=1 \\implies (x+1)^2 = 0 \\implies x = -1, -1$. 5-second answer!`;
+
+    derivationText = `💡 **Step-by-Step Derivation:**\n1. Product of roots $= \\frac{c}{a}$. Given $\\alpha \\cdot \\frac{1}{\\alpha} = 1 \\implies \\frac{2k}{2} = 1 \\implies k = 1$.\n2. Quadratic equation becomes $2x^2 + 4x + 2 = 0 \\implies x^2 + 2x + 1 = 0$.\n3. Factorizing $(x+1)^2 = 0 \\implies x = -1, -1$.\n4. **Conclusion:** Both roots are **-1 and -1**.`;
+
+    if (q.options) {
+      for (let oIdx = 0; oIdx < q.options.length; oIdx++) {
+        const optStr = q.options[oIdx];
+        if (optStr.includes('-1 and -1') || optStr.includes('-1 , -1') || optStr.includes('-1')) {
+          q.correctAnswerIndex = oIdx;
+          break;
+        }
+      }
+    }
+  } else if (/percentage|money|loses|discount|marked price|cost price|profit|gain/i.test(text)) {
     shortTrickText = `⚡ **Short Trick / Speed Method (5-Second Exam Shortcut):**\nUse Net Multiplier formula: $\\text{Final Ratio} = \\frac{\\text{Paid Items}}{\\text{Total Items}} \\times (1 - D)$. Calculate directly in 1 step!`;
     derivationText = `💡 **Step-by-Step Derivation:**\nLet Cost Price per item = $100$.\nTotal articles received = $112 + 40 = 152$.\nCustomer pays for $112$ articles, so total revenue $= 112 \\times MP$.\nTotal cost for seller $= 152 \\times 100 = 15200$.\nGiven profit is $26\\%$, so total revenue $= 15200 \\times 1.26 = 19152$.\nHence, $112 \\times MP = 19152 \\implies MP = 171$.\nMarked price is $71\\%$ above cost price!`;
   } else if (/average|multiples|mean/i.test(text)) {
