@@ -4083,39 +4083,41 @@ function autoClassifyQuestionSubjectTopic(q) {
 
 function getAllAvailableSubjects() {
   const set = new Set();
-  currentQuestionsList.forEach(q => { if (q.subject) set.add(q.subject); });
-  if (window.QB_DECKS) {
-    Object.keys(window.QB_DECKS).forEach(s => set.add(s));
+  currentQuestionsList.forEach(q => { if (q.subject && q.subject.trim()) set.add(q.subject.trim()); });
+  if (typeof QB !== 'undefined' && QB.getDecks) {
+    const decks = QB.getDecks();
+    decks.forEach(d => { if (d.subject && d.subject.trim()) set.add(d.subject.trim()); });
   }
-  set.add("General Aptitude");
-  set.add("Mechanical Engineering");
-  set.add("Electrical Engineering");
-  set.add("Civil Engineering");
-  set.add("Computer Science");
+  if (set.size === 0) {
+    set.add("General Aptitude");
+  }
   return Array.from(set);
 }
 
 function getTopicsForSubject(subj) {
   const set = new Set();
-  currentQuestionsList.filter(q => q.subject === subj).forEach(q => { if (q.topic) set.add(q.topic); });
-  if (window.QB_DECKS && window.QB_DECKS[subj]) {
-    window.QB_DECKS[subj].forEach(t => set.add(t));
+  const targetSubj = (subj || '').trim();
+
+  currentQuestionsList.filter(q => (q.subject || '').trim() === targetSubj).forEach(q => {
+    if (q.topic && q.topic.trim()) set.add(q.topic.trim());
+  });
+
+  if (typeof QB !== 'undefined' && QB.getDecks) {
+    const decks = QB.getDecks();
+    decks.filter(d => (d.subject || '').trim() === targetSubj).forEach(d => {
+      if (d.topic && d.topic.trim()) set.add(d.topic.trim());
+    });
   }
-  if (subj === "General Aptitude") {
-    set.add("Quantitative Aptitude");
-    set.add("Logical Reasoning");
-    set.add("Verbal Ability");
-  } else if (subj === "Mechanical Engineering") {
-    set.add("Fluid Mechanics");
-    set.add("Thermodynamics");
-    set.add("Strength of Materials");
-    set.add("Theory of Machines");
+
+  if (set.size === 0) {
+    set.add("General Topic");
   }
   return Array.from(set);
 }
 
 function getSubjectOptionsHtml(selectedSubj) {
   const subjects = getAllAvailableSubjects();
+  if (selectedSubj && !subjects.includes(selectedSubj)) subjects.unshift(selectedSubj);
   let html = subjects.map(s => `<option value="${escapeHtml(s)}" ${s === selectedSubj ? 'selected' : ''}>📁 ${escapeHtml(s)}</option>`).join('');
   html += `<option value="__NEW_SUBJECT__">➕ Create New Subject...</option>`;
   return html;
@@ -4129,40 +4131,76 @@ function getTopicOptionsHtml(subj, selectedTopic) {
   return html;
 }
 
-function onParsedSubjectChange(idx) {
+async function onParsedSubjectChange(idx) {
   const subjSelect = document.getElementById(`parsed-subject-${idx}`);
   if (!subjSelect) return;
 
   let newSubj = subjSelect.value;
+  let newTopic = "General Topic";
+
   if (newSubj === '__NEW_SUBJECT__') {
     const customSubj = prompt("➕ Enter New Subject Name for Topics Manager:");
     if (customSubj && customSubj.trim()) {
       newSubj = customSubj.trim();
+      const customTopic = prompt(`➕ Enter Initial Topic Name under [${newSubj}] for Topics Manager:`) || "General Topic";
+      newTopic = customTopic.trim();
+
+      // Automatically register new Subject + Topic deck into Topics Manager
+      if (typeof QB !== 'undefined' && QB.saveDeck) {
+        await QB.saveDeck({
+          id: "deck_" + Date.now(),
+          name: `${newSubj} - ${newTopic}`,
+          subject: newSubj,
+          topic: newTopic,
+          createdAt: new Date().toISOString()
+        });
+        if (typeof renderTopicsManager === 'function') renderTopicsManager();
+        if (typeof renderDecks === 'function') renderDecks();
+      }
     } else {
-      newSubj = "General Aptitude";
+      const avail = getAllAvailableSubjects();
+      newSubj = avail[0] || "General Aptitude";
+      newTopic = getTopicsForSubject(newSubj)[0] || "General Topic";
     }
+  } else {
+    const availTopics = getTopicsForSubject(newSubj);
+    newTopic = availTopics[0] || "General Topic";
   }
 
   if (parsedPdfQuestions[idx]) {
     parsedPdfQuestions[idx].subject = newSubj;
-    const topics = getTopicsForSubject(newSubj);
-    parsedPdfQuestions[idx].topic = topics[0] || "General Topic";
+    parsedPdfQuestions[idx].topic = newTopic;
   }
   renderParsedPreview();
 }
 
-function onParsedTopicChange(idx) {
+async function onParsedTopicChange(idx) {
   const topicSelect = document.getElementById(`parsed-topic-${idx}`);
   if (!topicSelect) return;
 
   let newTopic = topicSelect.value;
+  const currentSubj = parsedPdfQuestions[idx]?.subject || "General Subject";
+
   if (newTopic === '__NEW_TOPIC__') {
-    const currentSubj = parsedPdfQuestions[idx]?.subject || "General Subject";
     const customTopic = prompt(`➕ Enter New Topic Name under [${currentSubj}] for Topics Manager:`);
     if (customTopic && customTopic.trim()) {
       newTopic = customTopic.trim();
+
+      // Automatically register new Topic deck into Topics Manager
+      if (typeof QB !== 'undefined' && QB.saveDeck) {
+        await QB.saveDeck({
+          id: "deck_" + Date.now(),
+          name: `${currentSubj} - ${newTopic}`,
+          subject: currentSubj,
+          topic: newTopic,
+          createdAt: new Date().toISOString()
+        });
+        if (typeof renderTopicsManager === 'function') renderTopicsManager();
+        if (typeof renderDecks === 'function') renderDecks();
+      }
     } else {
-      newTopic = "General Topic";
+      const availTopics = getTopicsForSubject(currentSubj);
+      newTopic = availTopics[0] || "General Topic";
     }
   }
 
