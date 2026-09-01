@@ -174,6 +174,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   window.deleteParsedQuestion = deleteParsedQuestion;
   window.toggleParsedEditMode = toggleParsedEditMode;
   window.generateParsedQuestionAISolution = generateParsedQuestionAISolution;
+  window.attemptParsedQuestionPreview = attemptParsedQuestionPreview;
+  window.resetParsedQuestionAttempt = resetParsedQuestionAttempt;
 
   // DECKS TOPIC MANAGER WINDOW EXPORTS
   window.renderDecks = renderDecks;
@@ -4168,6 +4170,22 @@ Instructions:
   renderParsedPreview();
 }
 
+function attemptParsedQuestionPreview(qIdx, optionIdx) {
+  const q = parsedPdfQuestions[qIdx];
+  if (!q) return;
+
+  q._userAttemptedIdx = optionIdx;
+  renderParsedPreview();
+}
+
+function resetParsedQuestionAttempt(qIdx) {
+  const q = parsedPdfQuestions[qIdx];
+  if (!q) return;
+
+  delete q._userAttemptedIdx;
+  renderParsedPreview();
+}
+
 function onParsedCorrectAnswerChange(idx, val) {
   const correctIdx = parseInt(val, 10);
   if (parsedPdfQuestions[idx]) {
@@ -4265,7 +4283,7 @@ function renderParsedPreview() {
           <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
         `}
 
-        <!-- Options Grid (View vs Edit Mode) -->
+        <!-- Options Grid (View vs Edit Mode vs Interactive Test Mode) -->
         ${isEditing ? `
           <div class="space-y-2 pt-1">
             <label class="block text-xs font-extrabold text-indigo-600 dark:text-indigo-400">✏️ Edit Options (A, B, C, D):</label>
@@ -4279,16 +4297,63 @@ function renderParsedPreview() {
             </div>
           </div>
         ` : `
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-900 dark:text-slate-300 font-bold pt-1">
-            ${q.options.map((opt, oIdx) => {
-              const isCorrect = (oIdx === currentCorrect);
-              return `
-                <div class="p-2.5 rounded-xl border flex items-center justify-between transition ${isCorrect ? 'border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-extrabold shadow-sm' : 'bg-white dark:bg-black border-slate-200 dark:border-zinc-800'}">
-                  <span>${String.fromCharCode(65 + oIdx)}) ${formatSubSupScripts(escapeHtml(opt))}</span>
-                  ${isCorrect ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">✓ Correct</span>` : ''}
-                </div>
-              `;
-            }).join('')}
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center justify-between text-xs font-black text-slate-600 dark:text-slate-400">
+              <span class="flex items-center space-x-1.5">
+                <i class="fa-solid fa-gamepad text-indigo-500"></i>
+                <span>🎯 Click Option to Test/Solve Question ${idx + 1}:</span>
+              </span>
+              ${typeof q._userAttemptedIdx === 'number' ? `
+                <button onclick="resetParsedQuestionAttempt(${idx})" class="text-[11px] bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-700 dark:text-slate-300 px-2 py-0.5 rounded-lg transition font-bold">
+                  🔄 Reset Attempt
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold">
+              ${q.options.map((opt, oIdx) => {
+                const isAttempted = (typeof q._userAttemptedIdx === 'number');
+                const isSelected = (q._userAttemptedIdx === oIdx);
+                const isCorrectOpt = (oIdx === currentCorrect);
+
+                let cardStyle = "bg-white dark:bg-black border-slate-200 dark:border-zinc-800 hover:border-indigo-500 hover:shadow-md cursor-pointer text-slate-900 dark:text-slate-200";
+                let badge = "";
+
+                if (isAttempted) {
+                  if (isCorrectOpt) {
+                    cardStyle = "border-2 border-emerald-500 bg-emerald-50 dark:bg-emerald-950/80 text-emerald-950 dark:text-emerald-200 font-black shadow-md shadow-emerald-500/20";
+                    badge = `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md">✓ Correct Answer</span>`;
+                  } else if (isSelected && !isCorrectOpt) {
+                    cardStyle = "border-2 border-rose-500 bg-rose-50 dark:bg-rose-950/80 text-rose-950 dark:text-rose-200 font-black shadow-md shadow-rose-500/20";
+                    badge = `<span class="bg-rose-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md">✗ Your Attempt</span>`;
+                  }
+                }
+
+                return `
+                  <button onclick="attemptParsedQuestionPreview(${idx}, ${oIdx})" class="w-full text-left p-3 rounded-xl border ${cardStyle} flex items-center justify-between transition group">
+                    <div class="flex items-center space-x-2.5">
+                      <span class="w-6 h-6 rounded-lg ${isSelected ? (isCorrectOpt ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white') : (isAttempted && isCorrectOpt ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-200')} font-black flex items-center justify-center text-xs shrink-0">
+                        ${String.fromCharCode(65 + oIdx)}
+                      </span>
+                      <span class="font-extrabold">${formatSubSupScripts(escapeHtml(opt))}</span>
+                    </div>
+                    ${badge}
+                  </button>
+                `;
+              }).join('')}
+            </div>
+
+            ${typeof q._userAttemptedIdx === 'number' ? `
+              <div class="mt-2 p-2.5 rounded-xl border text-xs font-black flex items-center justify-between ${q._userAttemptedIdx === currentCorrect ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400'}">
+                <span class="flex items-center space-x-1.5">
+                  <i class="fa-solid ${q._userAttemptedIdx === currentCorrect ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-rose-500'} text-sm"></i>
+                  <span>${q._userAttemptedIdx === currentCorrect ? '🎉 Great Job! Option (' + String.fromCharCode(65 + currentCorrect) + ') is correct!' : '⚠️ Incorrect. Option (' + String.fromCharCode(65 + currentCorrect) + ') is the right answer.'}</span>
+                </span>
+                <button onclick="generateParsedQuestionAISolution(${idx})" class="text-[11px] bg-indigo-600 text-white hover:bg-indigo-500 px-2.5 py-1 rounded-lg font-black transition shadow-sm">
+                  ✨ View AI Solution
+                </button>
+              </div>
+            ` : ''}
           </div>
         `}
 
