@@ -105,35 +105,55 @@ async function autoPurgeExpiredQuestions(questionsList) {
 }
 
 QB.saveQuestion = async function(questionData) {
+  const normText = (questionData.questionText || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim();
+  const existingQuestions = getLocalQuestions();
+
+  let targetId = questionData.id;
+  let existingQ = null;
+
+  if (targetId) {
+    existingQ = existingQuestions.find(q => q.id === targetId);
+  }
+
+  if (!existingQ && normText.length > 5) {
+    existingQ = existingQuestions.find(q => !q.deleted && (q.questionText || "").toLowerCase().replace(/[^a-z0-9]/g, "").trim() === normText);
+  }
+
+  if (existingQ) {
+    targetId = existingQ.id; // Reuse existing ID so it UPDATES and MOVES the question instead of creating a duplicate!
+  } else if (!targetId) {
+    targetId = "q_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+  }
+
   const qObj = {
-    id: questionData.id || "q_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-    title: questionData.title || "Untitled Question",
-    questionText: questionData.questionText || "",
-    options: questionData.options || [],
-    correctAnswerIndex: typeof questionData.correctAnswerIndex === 'number' ? questionData.correctAnswerIndex : 0,
-    explanation: questionData.explanation || "No explanation provided.",
-    source: questionData.source || "manual",
-    status: questionData.status || "pending",
-    subject: questionData.subject || "General Subject",
-    topic: questionData.topic || questionData.subject || "General Topic",
-    subfolder: questionData.subfolder || "General Subfolder",
-    tags: questionData.tags || [],
-    createdAt: questionData.createdAt || new Date().toISOString(),
-    lastAttemptedAt: questionData.lastAttemptedAt || null,
-    attemptCount: questionData.attemptCount || 0,
-    wrongAttemptsCount: questionData.wrongAttemptsCount || 0,
-    userSelectedOption: questionData.userSelectedOption ?? null,
+    id: targetId,
+    title: questionData.title || existingQ?.title || "Untitled Question",
+    questionText: questionData.questionText || existingQ?.questionText || "",
+    options: questionData.options || existingQ?.options || [],
+    correctAnswerIndex: typeof questionData.correctAnswerIndex === 'number' ? questionData.correctAnswerIndex : (existingQ?.correctAnswerIndex ?? 0),
+    explanation: questionData.explanation || existingQ?.explanation || "No explanation provided.",
+    source: questionData.source || existingQ?.source || "manual",
+    status: questionData.status || existingQ?.status || "pending",
+    subject: questionData.subject || existingQ?.subject || "General Subject",
+    topic: questionData.topic || questionData.subject || existingQ?.topic || "General Topic",
+    subfolder: questionData.subfolder || existingQ?.subfolder || "General Subfolder",
+    tags: questionData.tags || existingQ?.tags || [],
+    createdAt: existingQ?.createdAt || questionData.createdAt || new Date().toISOString(),
+    lastAttemptedAt: questionData.lastAttemptedAt || existingQ?.lastAttemptedAt || null,
+    attemptCount: questionData.attemptCount ?? existingQ?.attemptCount ?? 0,
+    wrongAttemptsCount: questionData.wrongAttemptsCount ?? existingQ?.wrongAttemptsCount ?? 0,
+    userSelectedOption: questionData.userSelectedOption ?? existingQ?.userSelectedOption ?? null,
     // Spaced Repetition (SRS SM-2) Memory Engine Fields
-    srsInterval: questionData.srsInterval || 1,
-    srsRepetition: questionData.srsRepetition || 0,
-    srsEaseFactor: questionData.srsEaseFactor || 2.5,
-    nextReviewDate: questionData.nextReviewDate || new Date().toISOString(),
-    userNote: questionData.userNote || "",
-    history: Array.isArray(questionData.history) ? questionData.history : [],
-    historyIndex: typeof questionData.historyIndex === 'number' ? questionData.historyIndex : -1,
-    deleted: questionData.deleted || false,
-    deletedAt: questionData.deletedAt || null,
-    expiresAt: questionData.expiresAt || null
+    srsInterval: questionData.srsInterval || existingQ?.srsInterval || 1,
+    srsRepetition: questionData.srsRepetition || existingQ?.srsRepetition || 0,
+    srsEaseFactor: questionData.srsEaseFactor || existingQ?.srsEaseFactor || 2.5,
+    nextReviewDate: questionData.nextReviewDate || existingQ?.nextReviewDate || new Date().toISOString(),
+    userNote: questionData.userNote || existingQ?.userNote || "",
+    history: Array.isArray(questionData.history) ? questionData.history : (existingQ?.history || []),
+    historyIndex: typeof questionData.historyIndex === 'number' ? questionData.historyIndex : (existingQ?.historyIndex ?? -1),
+    deleted: false,
+    deletedAt: null,
+    expiresAt: null
   };
 
   if (QB.db) {
@@ -144,11 +164,10 @@ QB.saveQuestion = async function(questionData) {
     }
   }
 
-  const questions = getLocalQuestions();
-  const idx = questions.findIndex(q => q.id === qObj.id);
-  if (idx >= 0) questions[idx] = qObj;
-  else questions.unshift(qObj);
-  saveLocalQuestions(questions);
+  const idx = existingQuestions.findIndex(q => q.id === qObj.id);
+  if (idx >= 0) existingQuestions[idx] = qObj;
+  else existingQuestions.unshift(qObj);
+  saveLocalQuestions(existingQuestions);
 
   return qObj;
 };

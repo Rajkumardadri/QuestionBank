@@ -4118,15 +4118,20 @@ function getTopicsForSubject(subj) {
 function getSubjectOptionsHtml(selectedSubj) {
   const subjects = getAllAvailableSubjects();
   if (selectedSubj && !subjects.includes(selectedSubj)) subjects.unshift(selectedSubj);
-  let html = subjects.map(s => `<option value="${escapeHtml(s)}" ${s === selectedSubj ? 'selected' : ''}>📁 ${escapeHtml(s)}</option>`).join('');
+  let html = `<option value="" ${!selectedSubj ? 'selected' : ''}>⚠️ -- Choose Subject --</option>`;
+  html += subjects.map(s => `<option value="${escapeHtml(s)}" ${s === selectedSubj ? 'selected' : ''}>📁 ${escapeHtml(s)}</option>`).join('');
   html += `<option value="__NEW_SUBJECT__">➕ Create New Subject...</option>`;
   return html;
 }
 
 function getTopicOptionsHtml(subj, selectedTopic) {
-  const topics = getTopicsForSubject(subj || 'General Aptitude');
+  if (!subj) {
+    return `<option value="">⚠️ -- Select Subject First --</option>`;
+  }
+  const topics = getTopicsForSubject(subj);
   if (selectedTopic && !topics.includes(selectedTopic)) topics.unshift(selectedTopic);
-  let html = topics.map(t => `<option value="${escapeHtml(t)}" ${t === selectedTopic ? 'selected' : ''}>📂 ${escapeHtml(t)}</option>`).join('');
+  let html = `<option value="" ${!selectedTopic ? 'selected' : ''}>⚠️ -- Choose Topic --</option>`;
+  html += topics.map(t => `<option value="${escapeHtml(t)}" ${t === selectedTopic ? 'selected' : ''}>📂 ${escapeHtml(t)}</option>`).join('');
   html += `<option value="__NEW_TOPIC__">➕ Create New Topic...</option>`;
   return html;
 }
@@ -4136,7 +4141,7 @@ async function onParsedSubjectChange(idx) {
   if (!subjSelect) return;
 
   let newSubj = subjSelect.value;
-  let newTopic = "General Topic";
+  let newTopic = "";
 
   if (newSubj === '__NEW_SUBJECT__') {
     const customSubj = prompt("➕ Enter New Subject Name for Topics Manager:");
@@ -4158,13 +4163,11 @@ async function onParsedSubjectChange(idx) {
         if (typeof renderDecks === 'function') renderDecks();
       }
     } else {
-      const avail = getAllAvailableSubjects();
-      newSubj = avail[0] || "General Aptitude";
-      newTopic = getTopicsForSubject(newSubj)[0] || "General Topic";
+      newSubj = "";
+      newTopic = "";
     }
   } else {
-    const availTopics = getTopicsForSubject(newSubj);
-    newTopic = availTopics[0] || "General Topic";
+    newTopic = "";
   }
 
   if (parsedPdfQuestions[idx]) {
@@ -4179,10 +4182,10 @@ async function onParsedTopicChange(idx) {
   if (!topicSelect) return;
 
   let newTopic = topicSelect.value;
-  const currentSubj = parsedPdfQuestions[idx]?.subject || "General Subject";
+  const currentSubj = parsedPdfQuestions[idx]?.subject || "";
 
   if (newTopic === '__NEW_TOPIC__') {
-    const customTopic = prompt(`➕ Enter New Topic Name under [${currentSubj}] for Topics Manager:`);
+    const customTopic = prompt(`➕ Enter New Topic Name under [${currentSubj || 'New Subject'}] for Topics Manager:`);
     if (customTopic && customTopic.trim()) {
       newTopic = customTopic.trim();
 
@@ -4199,8 +4202,7 @@ async function onParsedTopicChange(idx) {
         if (typeof renderDecks === 'function') renderDecks();
       }
     } else {
-      const availTopics = getTopicsForSubject(currentSubj);
-      newTopic = availTopics[0] || "General Topic";
+      newTopic = "";
     }
   }
 
@@ -4264,21 +4266,39 @@ async function saveSingleParsedQuestion(idx) {
   const q = parsedPdfQuestions[idx];
   if (!q) return;
 
+  const subjEl = document.getElementById(`parsed-subject-${idx}`);
+  const topicEl = document.getElementById(`parsed-topic-${idx}`);
+
+  const selectedSubj = (subjEl ? subjEl.value : (q.subject || "")).trim();
+  const selectedTopic = (topicEl ? topicEl.value : (q.topic || "")).trim();
+
+  // Pop-Up Guard: Pop-up alert if Subject or Topic is unselected!
+  if (!selectedSubj || selectedSubj === '__NEW_SUBJECT__') {
+    alert(`⚠️ Please choose a Subject for Question ${idx + 1} before saving!`);
+    subjEl?.focus();
+    return;
+  }
+
+  if (!selectedTopic || selectedTopic === '__NEW_TOPIC__') {
+    alert(`⚠️ Please choose a Topic for Question ${idx + 1} under [${selectedSubj}] before saving!`);
+    topicEl?.focus();
+    return;
+  }
+
+  q.subject = selectedSubj;
+  q.topic = selectedTopic;
+
   const btn = document.getElementById(`btn-save-parsed-${idx}`);
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Saving...</span>`;
   }
 
-  const subjEl = document.getElementById(`parsed-subject-${idx}`);
-  const topicEl = document.getElementById(`parsed-topic-${idx}`);
-
-  if (subjEl && subjEl.value && subjEl.value !== '__NEW_SUBJECT__') q.subject = subjEl.value;
-  if (topicEl && topicEl.value && topicEl.value !== '__NEW_TOPIC__') q.topic = topicEl.value;
-
   await QB.saveQuestion(q);
 
-  q._isSaved = true;
+  // Remove saved question from preview queue
+  parsedPdfQuestions.splice(idx, 1);
+
   renderParsedPreview();
   await loadDashboardData();
 }
@@ -4310,13 +4330,6 @@ function renderParsedPreview() {
     container.classList.add('hidden');
     return;
   }
-
-  // Auto classify each parsed question by keywords if subject/topic not manually assigned
-  parsedPdfQuestions.forEach(q => {
-    if (!q.subject || q.subject === 'General Subject' || q.subject === 'Mechanical Engineering') {
-      autoClassifyQuestionSubjectTopic(q);
-    }
-  });
 
   countEl.innerText = parsedPdfQuestions.length;
   container.classList.remove('hidden');
@@ -4361,14 +4374,14 @@ function renderParsedPreview() {
           </div>
         </div>
 
-        <!-- Individual Subject & Topic Dropdown Selector Bar with + Create Options linked to Topics Manager -->
+        <!-- Individual Subject & Topic Dropdown Selector Bar with Choose Subject/Topic defaults -->
         <div class="flex flex-wrap items-center gap-2 p-2.5 bg-indigo-50/80 dark:bg-zinc-950 rounded-xl border border-indigo-500/30">
           <span class="text-xs font-black text-indigo-600 dark:text-indigo-400 shrink-0">📁 Target Subject & Topic for Question ${idx + 1}:</span>
-          <select id="parsed-subject-${idx}" onchange="onParsedSubjectChange(${idx})" class="p-1.5 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
+          <select id="parsed-subject-${idx}" onchange="onParsedSubjectChange(${idx})" class="p-1.5 bg-white dark:bg-black border ${!q.subject ? 'border-amber-500 animate-pulse' : 'border-slate-300 dark:border-zinc-800'} rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
             ${getSubjectOptionsHtml(q.subject)}
           </select>
           <span class="text-slate-400 font-black">/</span>
-          <select id="parsed-topic-${idx}" onchange="onParsedTopicChange(${idx})" class="p-1.5 bg-white dark:bg-black border border-slate-300 dark:border-zinc-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
+          <select id="parsed-topic-${idx}" onchange="onParsedTopicChange(${idx})" class="p-1.5 bg-white dark:bg-black border ${!q.topic ? 'border-amber-500 animate-pulse' : 'border-slate-300 dark:border-zinc-800'} rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 cursor-pointer">
             ${getTopicOptionsHtml(q.subject, q.topic)}
           </select>
         </div>
@@ -4457,23 +4470,41 @@ function renderParsedPreview() {
 async function saveAllParsedQuestions() {
   if (parsedPdfQuestions.length === 0) return;
 
+  // Pop-Up Guard: Validate that EVERY question has a Subject and Topic chosen!
   for (let i = 0; i < parsedPdfQuestions.length; i++) {
     const q = parsedPdfQuestions[i];
     const subjEl = document.getElementById(`parsed-subject-${i}`);
     const topicEl = document.getElementById(`parsed-topic-${i}`);
-    const correctEl = document.getElementById(`parsed-correct-${i}`);
 
-    if (subjEl && subjEl.value) q.subject = subjEl.value;
-    if (topicEl && topicEl.value) q.topic = topicEl.value;
-    if (correctEl && correctEl.value !== undefined) q.correctAnswerIndex = parseInt(correctEl.value, 10);
+    const selectedSubj = (subjEl ? subjEl.value : (q.subject || "")).trim();
+    const selectedTopic = (topicEl ? topicEl.value : (q.topic || "")).trim();
 
+    if (!selectedSubj || selectedSubj === '__NEW_SUBJECT__') {
+      alert(`⚠️ Please choose a Subject for Question ${i + 1} before saving!`);
+      subjEl?.focus();
+      return;
+    }
+
+    if (!selectedTopic || selectedTopic === '__NEW_TOPIC__') {
+      alert(`⚠️ Please choose a Topic for Question ${i + 1} under [${selectedSubj}] before saving!`);
+      topicEl?.focus();
+      return;
+    }
+
+    q.subject = selectedSubj;
+    q.topic = selectedTopic;
+  }
+
+  const count = parsedPdfQuestions.length;
+  for (const q of parsedPdfQuestions) {
     await QB.saveQuestion(q);
   }
 
-  alert(`🎉 Successfully saved ${parsedPdfQuestions.length} questions into their respective Subject & Topic folders with verified correct answers!`);
   parsedPdfQuestions = [];
-  document.getElementById('pdf-parsed-preview').classList.add('hidden');
+  document.getElementById('pdf-parsed-preview')?.classList.add('hidden');
+
   await loadDashboardData();
+  alert(`🎉 Successfully saved ${count} questions to database! Queue preview cleared.`);
   switchTab('dashboard');
 }
 
