@@ -38,11 +38,19 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
 
+  <!-- Clean, Simple & Sweet Google Fonts (Plus Jakarta Sans & Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+          },
           colors: {
             brand: {
               50: '#eef2ff',
@@ -57,6 +65,64 @@
     }
   </script>
   <style>
+    /* Clean, Simple & Sweet Typography (No harsh heavy bold) */
+    *, html, body, button, input, select, textarea {
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Soften all heavy bold weights into clean, gentle, sweet weights */
+    .font-black,
+    .font-extrabold {
+      font-weight: 550 !important;
+    }
+
+    .font-bold,
+    .font-semibold {
+      font-weight: 500 !important;
+    }
+
+    .font-medium {
+      font-weight: 450 !important;
+    }
+
+    .font-normal {
+      font-weight: 400 !important;
+    }
+
+    /* Keep questions, options, paragraphs, spans clean and readable (not bold) */
+    p, span, div, label, li, a {
+      letter-spacing: normal;
+    }
+
+    /* Specifically ensure question statements and options are never aggressively bold */
+    #practice-vertical-container .text-base,
+    #practice-vertical-container .text-sm,
+    #tab-practice .text-base,
+    #parsed-questions-list p,
+    #parsed-questions-list .text-sm,
+    [id^="options-container-"] span,
+    [id^="opt-"] span,
+    .question-stem {
+      font-weight: 400 !important;
+    }
+
+    /* Crisp and natural KaTeX math (never bold) */
+    .katex, .katex * {
+      font-weight: 400 !important;
+    }
+
+    /* Simple & sweet headings: clean semi-bold, not thick black */
+    h1, h2, h3, h4, h5, h6 {
+      font-weight: 600 !important;
+      letter-spacing: -0.015em;
+    }
+
+    b, strong {
+      font-weight: 550 !important;
+    }
+
     /* Glass Effect Containers */
     .glass {
       backdrop-filter: blur(12px);
@@ -392,6 +458,41 @@
         </div>
       </div>
 
+      <!-- 📊 TESTBOOK MOCK TEST PERFORMANCE & SCORECARDS HUB -->
+      <div class="glass p-5 rounded-2xl space-y-4 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-zinc-800 pb-3">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-500 text-xl font-bold shrink-0">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div>
+              <h3 class="font-semibold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <span>📊 Testbook Mock Tests & Performance Scorecards</span>
+                <span class="bg-indigo-600 text-white text-[10px] font-medium px-2.5 py-0.5 rounded-full uppercase">Live Synced</span>
+              </h3>
+              <p class="text-xs text-slate-600 dark:text-slate-400 font-normal mt-0.5">
+                Track scores, All India Ranks, percentiles, and 1-click revise missed questions from your Testbook mock tests!
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="openTestbookJsonImportModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-xl text-xs font-medium transition shadow-sm flex items-center space-x-1.5">
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+              <span>📥 Import Testbook JSON</span>
+            </button>
+            <button onclick="refreshTestbookSync()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-900 dark:text-slate-200 px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center space-x-1" title="Refresh Live Cloud Data">
+              <i class="fa-solid fa-rotate"></i>
+              <span>Sync</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Scorecards Grid -->
+        <div id="testbook-scorecards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
       <!-- SUBJECT & TOPIC REVISION PROGRESS ANALYTICS TRACKER -->
       <div class="glass p-6 rounded-2xl space-y-4 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
         <div>
@@ -673,6 +774,34 @@
             <i class="fa-solid fa-eye"></i>
             <span>View & Import 602 Book MCQs ↗</span>
           </a>
+        </div>
+
+        <!-- TESTBOOK 1-CLICK INTEGRATION & CLOUD IMPORT BANNER (FULL WIDTH) -->
+        <div class="w-full p-4 rounded-2xl bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-pink-500/15 border border-indigo-500/40 flex flex-col md:flex-row items-center justify-between gap-4 my-2 shadow-sm">
+          <div class="flex items-center space-x-3">
+            <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-xl shadow-lg shrink-0">
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+            </div>
+            <div>
+              <h4 class="font-semibold text-sm text-slate-900 dark:text-white flex items-center space-x-2">
+                <span>🚀 1-Click Testbook.com Live Integration & JSON Importer</span>
+                <span class="bg-indigo-600 text-white text-[10px] font-medium px-2.5 py-0.5 rounded-full uppercase">Sync & Vercel Ready</span>
+              </h4>
+              <p class="text-xs text-slate-600 dark:text-slate-300 font-normal mt-0.5">
+                Automatically imports questions, high-res figures, and scorecards synced via the Chrome Extension or raw JSON directly into Firebase!
+              </p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2 shrink-0">
+            <button onclick="openTestbookJsonImportModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2.5 rounded-xl text-xs shadow-md transition flex items-center space-x-1.5">
+              <i class="fa-solid fa-file-code"></i>
+              <span>Paste Testbook JSON</span>
+            </button>
+            <button onclick="refreshTestbookSync()" class="bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-900 dark:text-slate-200 font-medium px-3.5 py-2.5 rounded-xl text-xs transition flex items-center space-x-1" title="Pull latest questions from Firebase cloud">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              <span>Refresh Cloud</span>
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
@@ -1225,6 +1354,40 @@
     </div>
   </div>
 
+  <!-- 📥 TESTBOOK JSON & BATCH IMPORT MODAL -->
+  <div id="modal-testbook-import" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="glass max-w-xl w-full p-6 rounded-2xl space-y-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center font-bold text-lg">
+            <i class="fa-solid fa-cloud-arrow-down"></i>
+          </div>
+          <div>
+            <h3 class="font-semibold text-base text-slate-900 dark:text-white">Import Questions from Testbook</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 font-normal">Paste Testbook JSON or synced questions array below</p>
+          </div>
+        </div>
+        <button onclick="closeTestbookImportModal()" class="text-slate-400 hover:text-black dark:hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300">Testbook Questions JSON:</label>
+        <textarea id="testbook-json-input" rows="7" placeholder='[&#10;  {&#10;    "questionText": "What is the SI unit of Force?",&#10;    "options": ["Joule", "Newton", "Watt", "Pascal"],&#10;    "correctAnswerIndex": 1,&#10;    "explanation": "Newton is the SI unit of Force (F = ma)."&#10;  }&#10;]' class="w-full p-3 bg-slate-50 dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 rounded-xl text-xs font-mono text-slate-900 dark:text-slate-200 focus:outline-none focus:border-indigo-500"></textarea>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-zinc-800">
+        <span class="text-xs text-slate-500 dark:text-slate-400" id="testbook-import-status">Ready to import</span>
+        <div class="flex space-x-2">
+          <button onclick="closeTestbookImportModal()" class="px-4 py-2 bg-slate-200 dark:bg-zinc-800 hover:bg-slate-300 dark:hover:bg-zinc-700 text-slate-800 dark:text-slate-200 text-xs font-medium rounded-xl">Cancel</button>
+          <button onclick="executeTestbookJsonImport()" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-xl shadow-md transition flex items-center space-x-1.5">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Import & Save to Firebase</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- TOPIC READER MODAL -->
   <div id="modal-topic-reader" class="hidden fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="glass max-w-3xl w-full max-h-[90vh] p-6 rounded-2xl space-y-4 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex flex-col">
@@ -1477,6 +1640,7 @@
 
   <script src="./firebase-config.js"></script>
   <script src="./pdf-parser.js"></script>
+  <script src="./ai-service.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

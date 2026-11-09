@@ -512,3 +512,77 @@ QB.getMockQuestions = function() {
     }
   ];
 };
+
+// ==========================================
+// TESTBOOK MOCK SCORECARDS & BATCH SYNC ENGINE
+// ==========================================
+QB.saveMockScorecard = async function(scorecard) {
+  if (!scorecard || !scorecard.testTitle) return;
+  if (!scorecard.id) {
+    scorecard.id = "sc_tb_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4);
+  }
+  scorecard.date = scorecard.date || new Date().toISOString();
+  scorecard.source = scorecard.source || "testbook";
+
+  // 1. Local Storage Cache
+  let list = QB.getLocalMockScorecards();
+  list = list.filter(s => s.id !== scorecard.id && s.testTitle !== scorecard.testTitle);
+  list.unshift(scorecard);
+  localStorage.setItem("qb_mock_scorecards", JSON.stringify(list));
+
+  // 2. Firebase Firestore Sync
+  if (QB.db) {
+    try {
+      await QB.db.collection("mock_scorecards").doc(scorecard.id).set(scorecard);
+      console.log("✅ Mock Scorecard saved to Firestore:", scorecard.testTitle);
+    } catch(err) {
+      console.warn("⚠️ Firestore scorecard save error:", err);
+    }
+  }
+  return scorecard;
+};
+
+QB.getLocalMockScorecards = function() {
+  const saved = localStorage.getItem("qb_mock_scorecards");
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    } catch(e){}
+  }
+  return [];
+};
+
+QB.fetchMockScorecards = async function() {
+  let scorecards = [];
+  if (QB.db) {
+    try {
+      const snap = await QB.db.collection("mock_scorecards").orderBy("date", "desc").get();
+      snap.forEach(doc => {
+        scorecards.push({ id: doc.id, ...doc.data() });
+      });
+    } catch(err) {
+      console.warn("Firestore fetch scorecards warning:", err);
+    }
+  }
+
+  if (scorecards.length === 0) {
+    scorecards = QB.getLocalMockScorecards();
+  } else {
+    localStorage.setItem("qb_mock_scorecards", JSON.stringify(scorecards));
+  }
+
+  return scorecards;
+};
+
+QB.batchSaveQuestions = async function(questionsArray) {
+  if (!Array.isArray(questionsArray) || questionsArray.length === 0) return 0;
+  let savedCount = 0;
+  for (const q of questionsArray) {
+    if (q && q.questionText) {
+      await QB.saveQuestion(q);
+      savedCount++;
+    }
+  }
+  return savedCount;
+};

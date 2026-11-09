@@ -360,12 +360,12 @@ function formatMathSymbols(str) {
 
   // 2. Format LaTeX \sqrt{expr} and unicode √ (expr) with radical overline styling
   s = s.replace(/\\sqrt\{([^}]+)\}/g, (match, body) => {
-    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-extrabold font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-base font-black mr-0.5 select-none">√</span><span class="border-t-2 border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${body.trim()}</span></span>`;
+    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-medium font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-sm font-semibold mr-0.5 select-none">√</span><span class="border-t border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${body.trim()}</span></span>`;
   });
 
   s = s.replace(/√\s*\(?([a-zA-Z0-9\/\s\.\+\-·\*\(\)]+)\)?/g, (match, body) => {
     const cleanBody = body.trim().replace(/^\(|\)$/g, '');
-    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-extrabold font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-base font-black mr-0.5 select-none">√</span><span class="border-t-2 border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${cleanBody}</span></span>`;
+    return `<span class="inline-flex items-baseline text-indigo-600 dark:text-indigo-400 font-medium font-mono px-1.5 py-0.5 rounded bg-indigo-50/70 dark:bg-indigo-950/70 border border-indigo-300/60 dark:border-indigo-800/50 shadow-sm"><span class="text-sm font-semibold mr-0.5 select-none">√</span><span class="border-t border-indigo-600 dark:border-indigo-400 pt-0.5 px-0.5">${cleanBody}</span></span>`;
   });
 
   // 3. Greek & Engineering Symbols
@@ -400,21 +400,21 @@ function formatSubSupScripts(str) {
   formatted = formatted.replace(/\\text\{([^}]+)\}/g, ' $1 ');
 
   // Convert \frac{a}{b} LaTeX macro to clean HTML fraction
-  formatted = formatted.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="inline-flex flex-col text-center align-middle mx-1 text-[11px] font-bold"><span class="border-b border-current px-0.5">$1</span><span class="px-0.5">$2</span></span>');
+  formatted = formatted.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '<span class="inline-flex flex-col text-center align-middle mx-1 text-[11px] font-medium"><span class="border-b border-current px-0.5">$1</span><span class="px-0.5">$2</span></span>');
 
   // Convert markdown bold **text** to <strong>text</strong>
-  formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-black text-indigo-600 dark:text-indigo-400">$1</strong>');
+  formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-indigo-600 dark:text-indigo-400">$1</strong>');
 
   formatted = formatMathSymbols(formatted);
 
   // 1. Fractional Powers (e.g. ^(1/2), ^1/2, ^(3/2))
-  formatted = formatted.replace(/\^\(1\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">½</sup>');
-  formatted = formatted.replace(/\^1\/2/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">½</sup>');
-  formatted = formatted.replace(/\^\(3\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">1.5</sup>');
+  formatted = formatted.replace(/\^\(1\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-medium">½</sup>');
+  formatted = formatted.replace(/\^1\/2/g, '<sup class="text-amber-600 dark:text-amber-400 font-medium">½</sup>');
+  formatted = formatted.replace(/\^\(3\/2\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-medium">1.5</sup>');
 
   // 2. Explicit Powers (e.g. x^2, 10^5, 10^-3, a^(n+1))
-  formatted = formatted.replace(/\^\(([^)]+)\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">$1</sup>');
-  formatted = formatted.replace(/\^([+-]?\d+|[a-zA-Zα-ωΑ-Ω]+)/g, '<sup class="text-amber-600 dark:text-amber-400 font-bold">$1</sup>');
+  formatted = formatted.replace(/\^\(([^)]+)\)/g, '<sup class="text-amber-600 dark:text-amber-400 font-medium">$1</sup>');
+  formatted = formatted.replace(/\^([+-]?\d+|[a-zA-Zα-ωΑ-Ω]+)/g, '<sup class="text-amber-600 dark:text-amber-400 font-medium">$1</sup>');
 
   // 3. Common Engineering Units with Powers (e.g., m/s2 -> m/s², N/m2 -> N/m², cm3 -> cm³)
   formatted = formatted.replace(/\b(m|cm|mm|km|s|N|Pa|J|W|kg)\s*\/?\s*s?([234])\b/g, (m, unit, p) => {
@@ -580,11 +580,11 @@ function renderFormattedQuestionHTML(rawStr) {
 
       const tableRows = matchPairs.map(p => `
         <tr class="hover:bg-slate-100 dark:hover:bg-zinc-900 transition">
-          <td class="p-3 border-r border-slate-300 dark:border-zinc-800 font-extrabold text-slate-900 dark:text-white">
-            <span class="text-indigo-600 dark:text-indigo-400 font-black mr-2">${p.let}.</span>${formatSubSupScripts(escapeHtml(p.leftText))}
+          <td class="p-3 border-r border-slate-300 dark:border-zinc-800 font-normal text-slate-900 dark:text-white">
+            <span class="text-indigo-600 dark:text-indigo-400 font-semibold mr-2">${p.let}.</span>${formatSubSupScripts(escapeHtml(p.leftText))}
           </td>
-          <td class="p-3 font-extrabold text-slate-900 dark:text-white">
-            <span class="text-indigo-600 dark:text-indigo-400 font-black mr-2">${p.num}.</span>${formatSubSupScripts(escapeHtml(p.rightText))}
+          <td class="p-3 font-normal text-slate-900 dark:text-white">
+            <span class="text-indigo-600 dark:text-indigo-400 font-semibold mr-2">${p.num}.</span>${formatSubSupScripts(escapeHtml(p.rightText))}
           </td>
         </tr>
       `).join('');
@@ -592,7 +592,7 @@ function renderFormattedQuestionHTML(rawStr) {
       const tableHtml = `
         <div class="my-4 overflow-hidden rounded-xl border border-slate-300 dark:border-zinc-800 shadow-sm">
           <table class="w-full text-left border-collapse text-xs">
-            <thead class="bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-b border-slate-300 dark:border-zinc-800 font-black uppercase">
+            <thead class="bg-indigo-100 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border-b border-slate-300 dark:border-zinc-800 font-semibold uppercase">
               <tr>
                 <th class="p-3 border-r border-slate-300 dark:border-zinc-800 w-1/2">List I (Description / Parameter)</th>
                 <th class="p-3 w-1/2">List II (Dimensional Formula / Match)</th>
@@ -692,6 +692,7 @@ async function loadDashboardData() {
   renderHourlyMistakeSpotlight();
   renderSRSMemorySchedule();
   renderRevisionAnalytics();
+  renderTestbookMockScorecards();
   renderQuestionsTable();
   renderDecks();
   renderTopicsManager();
@@ -807,11 +808,11 @@ function renderHourlyMistakeSpotlight() {
   const formattedContent = renderFormattedQuestionHTML(q.questionText);
 
   const optionsHtml = q.options.map((opt, optIdx) => `
-    <button onclick="attemptHourlySpotlightQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="spotlight-opt-${q.id}-${optIdx}" class="w-full text-left p-3.5 bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 border border-slate-300 dark:border-zinc-700/60 rounded-xl text-xs font-extrabold text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
-      <span class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 group-hover:bg-rose-600 group-hover:text-white font-extrabold text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
+    <button onclick="attemptHourlySpotlightQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="spotlight-opt-${q.id}-${optIdx}" class="w-full text-left p-3.5 bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 dark:hover:bg-zinc-800 border border-slate-300 dark:border-zinc-700/60 rounded-xl text-xs font-normal text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
+      <span class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-700 dark:text-slate-300 group-hover:bg-rose-600 group-hover:text-white font-medium text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
         ${String.fromCharCode(65 + optIdx)}
       </span>
-      <span class="flex-1 font-extrabold text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
+      <span class="flex-1 font-normal text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
     </button>
   `).join('');
 
@@ -831,7 +832,7 @@ function renderHourlyMistakeSpotlight() {
         </div>
       </div>
 
-      <div class="text-sm font-black leading-relaxed bg-slate-100 dark:bg-black p-4 rounded-xl border border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm">${formattedContent}</div>
+      <div class="text-sm font-normal leading-relaxed bg-slate-100 dark:bg-black p-4 rounded-xl border border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm">${formattedContent}</div>
 
       <div class="space-y-2" id="spotlight-options-${q.id}">
         ${optionsHtml}
@@ -897,6 +898,155 @@ function startHourlyTimerCountdown() {
 
   updateTimer();
   hourlyTimerInterval = setInterval(updateTimer, 1000);
+}
+
+// ========================================================
+// 📊 TESTBOOK MOCK SCORECARDS & CLOUD SYNC HUB
+// ========================================================
+async function renderTestbookMockScorecards() {
+  const container = document.getElementById('testbook-scorecards-container');
+  if (!container) return;
+
+  const scorecards = await QB.fetchMockScorecards();
+
+  if (!scorecards || scorecards.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full p-6 text-center rounded-2xl border border-dashed border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-950/40 space-y-2">
+        <i class="fa-solid fa-graduation-cap text-3xl text-amber-500/70"></i>
+        <h4 class="font-semibold text-sm text-slate-800 dark:text-slate-200">No Testbook Mock Scorecards Synced Yet</h4>
+        <p class="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+          Open any Testbook Mock Test Result or Analysis page and click <span class="text-amber-500 font-medium">"📊 Scorecard"</span> in your Chrome Extension, or import JSON below!
+        </p>
+        <button onclick="openTestbookJsonImportModal()" class="mt-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-4 py-2 rounded-xl transition shadow-sm inline-flex items-center space-x-1.5">
+          <i class="fa-solid fa-cloud-arrow-down"></i>
+          <span>Import Testbook JSON</span>
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = scorecards.slice(0, 6).map(sc => {
+    const accuracy = Math.round(sc.accuracy || 0);
+    const score = Number(sc.score || 0).toFixed(1);
+    const totalMarks = Number(sc.totalMarks || 100);
+    const missed = (Number(sc.incorrect || 0) + Number(sc.unattempted || 0));
+    const testDate = sc.date ? new Date(sc.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent';
+
+    return `
+      <div class="p-4 rounded-2xl bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 space-y-3 shadow-sm hover:border-indigo-500/50 transition">
+        <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-zinc-800 pb-2.5">
+          <div>
+            <h4 class="font-semibold text-xs text-slate-900 dark:text-white line-clamp-1" title="${escapeHtml(sc.testTitle)}">
+              ${escapeHtml(sc.testTitle)}
+            </h4>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 font-medium">📅 ${testDate} • ⏳ ${escapeHtml(sc.timeTaken || 'Full Mock')}</span>
+          </div>
+          <span class="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0">
+            ${sc.rank > 0 ? 'AIR #' + sc.rank : 'Testbook'}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
+            <span class="text-[9px] uppercase text-slate-500 font-medium block">Score</span>
+            <span class="text-sm font-semibold text-indigo-600 dark:text-indigo-400 font-mono">${score} <span class="text-[9px] text-slate-400">/${totalMarks}</span></span>
+          </div>
+          <div class="p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
+            <span class="text-[9px] uppercase text-slate-500 font-medium block">Accuracy</span>
+            <span class="text-sm font-semibold ${accuracy >= 80 ? 'text-emerald-600' : 'text-amber-500'} font-mono">${accuracy}%</span>
+          </div>
+          <div class="p-2 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-100 dark:border-zinc-800">
+            <span class="text-[9px] uppercase text-slate-500 font-medium block">Missed</span>
+            <span class="text-sm font-semibold text-rose-600 dark:text-rose-400 font-mono">${missed}</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-[10px] text-slate-500 font-medium">Percentile: <strong class="text-slate-700 dark:text-slate-300">${sc.percentile > 0 ? sc.percentile + '%' : 'N/A'}</strong></span>
+          <button onclick="practiceTestbookMockMissedQuestions('${escapeHtml(sc.testTitle)}')" class="text-xs bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-600 hover:text-white text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/40 transition font-medium flex items-center space-x-1">
+            <i class="fa-solid fa-play text-[10px]"></i>
+            <span>Revise Missed (${missed})</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openTestbookJsonImportModal() {
+  const modal = document.getElementById('modal-testbook-import');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeTestbookImportModal() {
+  const modal = document.getElementById('modal-testbook-import');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function executeTestbookJsonImport() {
+  const inputEl = document.getElementById('testbook-json-input');
+  const statusEl = document.getElementById('testbook-import-status');
+  if (!inputEl) return;
+
+  const raw = inputEl.value.trim();
+  if (!raw) {
+    alert("Please paste Testbook questions JSON or array first!");
+    return;
+  }
+
+  try {
+    let parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      if (parsed.questions && Array.isArray(parsed.questions)) {
+        parsed = parsed.questions;
+      } else {
+        parsed = [parsed];
+      }
+    }
+
+    if (statusEl) statusEl.innerText = `Importing ${parsed.length} questions...`;
+
+    const savedCount = await QB.batchSaveQuestions(parsed);
+    closeTestbookImportModal();
+    inputEl.value = "";
+    alert(`🎉 Successfully imported and synced ${savedCount} Testbook questions into QuestionBank!`);
+    await loadDashboardData();
+  } catch (err) {
+    console.error("Testbook JSON parse error:", err);
+    if (statusEl) statusEl.innerText = `Error: ${err.message}`;
+    alert(`Invalid JSON format: ${err.message}`);
+  }
+}
+
+async function refreshTestbookSync() {
+  const icon = document.querySelector("#tab-dashboard i.fa-rotate");
+  if (icon) icon.classList.add("fa-spin");
+  await loadDashboardData();
+  setTimeout(() => {
+    if (icon) icon.classList.remove("fa-spin");
+  }, 600);
+}
+
+function practiceTestbookMockMissedQuestions(testTitle) {
+  switchTab('practice');
+  const sourceSel = document.getElementById('practice-filter-source');
+  if (sourceSel) sourceSel.value = 'testbook';
+
+  const statusSel = document.getElementById('practice-filter-status');
+  if (statusSel) statusSel.value = 'needs_revision';
+
+  if (testTitle) {
+    const matched = currentQuestionsList.filter(q => q.testTitle === testTitle || (q.tags && q.tags.includes(testTitle)));
+    if (matched.length > 0) {
+      filteredPracticeQuestions = matched;
+      currentPracticeIndex = 0;
+      loadPracticeQuestions();
+      return;
+    }
+  }
+
+  loadPracticeQuestions();
 }
 
 function togglePracticeViewMode(mode) {
@@ -981,11 +1131,11 @@ function renderVerticalQuestions() {
     const cleanSol = cleanExplanationDisplay(q.explanation);
 
     const optionsHtml = q.options.map((opt, optIdx) => `
-      <button onclick="attemptQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="opt-${q.id}-${optIdx}" class="w-full text-left p-4 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
-        <span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white font-extrabold text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
+      <button onclick="attemptQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="opt-${q.id}-${optIdx}" class="w-full text-left p-4 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-normal text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
+        <span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white font-medium text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
           ${String.fromCharCode(65 + optIdx)}
         </span>
-        <span class="flex-1 font-extrabold text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
+        <span class="flex-1 font-normal text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
       </button>
     `).join('');
 
@@ -1028,7 +1178,7 @@ function renderVerticalQuestions() {
           ${subheaderBadge}
         </div>
 
-        <div class="text-base font-black leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm">${formattedQuestionContent}</div>
+        <div class="text-base font-normal leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm">${formattedQuestionContent}</div>
 
         <div class="space-y-2.5" id="options-container-${q.id}">
           ${optionsHtml}
@@ -1502,7 +1652,7 @@ async function renderRecycleBin() {
           </span>
         </div>
 
-        <div class="text-sm font-extrabold text-slate-900 dark:text-white leading-relaxed line-clamp-2">${renderFormattedQuestionHTML(q.questionText)}</div>
+        <div class="text-sm font-normal text-slate-900 dark:text-white leading-relaxed line-clamp-2">${renderFormattedQuestionHTML(q.questionText)}</div>
 
         <div class="text-xs font-bold text-slate-500 dark:text-slate-400">
           Folder: <span class="text-indigo-600 dark:text-indigo-400 font-bold">${escapeHtml(q.subject || 'General')} → ${escapeHtml(q.topic || 'General')}</span>
@@ -1849,7 +1999,7 @@ function openTopicReaderModal(subj, top) {
         </div>
       </div>
 
-      <div class="text-sm font-extrabold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap">${renderFormattedQuestionHTML(q.questionText)}</div>
+      <div class="text-sm font-normal text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap">${renderFormattedQuestionHTML(q.questionText)}</div>
 
       <div class="grid grid-cols-2 gap-2 text-xs font-bold pt-1">
         ${q.options.map((opt, oIdx) => `
@@ -2159,7 +2309,7 @@ function renderQuestionsTable() {
 
     return `
       <tr class="hover:bg-slate-100 dark:hover:bg-zinc-900 transition">
-        <td class="p-3.5 font-extrabold text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(cleanText)}</td>
+        <td class="p-3.5 font-normal text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(cleanText)}</td>
         <td class="p-3.5 text-xs cursor-pointer" onclick="practiceSpecificTopic('${escapeHtml(q.subject)}', '${escapeHtml(q.topic)}')">
           <div class="font-black text-amber-600 dark:text-amber-400">📁 ${escapeHtml(q.subject || 'General')}</div>
           <div class="text-indigo-600 dark:text-indigo-400 font-bold">📂 ${escapeHtml(q.topic || 'General')}${subText}</div>
@@ -2282,11 +2432,11 @@ function loadPracticeQuestions() {
   const cleanSol = cleanExplanationDisplay(q.explanation);
 
   const optionsHtml = q.options.map((opt, optIdx) => `
-    <button onclick="attemptQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="opt-${q.id}-${optIdx}" class="w-full text-left p-4 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-bold text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
-      <span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white font-extrabold text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
+    <button onclick="attemptQuestion('${q.id}', ${optIdx}, ${q.correctAnswerIndex})" id="opt-${q.id}-${optIdx}" class="w-full text-left p-4 bg-white dark:bg-zinc-900 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-normal text-slate-900 dark:text-white transition flex items-center space-x-3 group shadow-sm">
+      <span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-300 group-hover:bg-indigo-600 group-hover:text-white font-medium text-xs flex items-center justify-center border border-slate-300 dark:border-zinc-700 transition">
         ${String.fromCharCode(65 + optIdx)}
       </span>
-      <span class="flex-1 font-extrabold text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
+      <span class="flex-1 font-normal text-slate-900 dark:text-white">${formatSubSupScripts(escapeHtml(opt))}</span>
     </button>
   `).join('');
 
@@ -2432,7 +2582,7 @@ function loadPracticeQuestions() {
             ${subheaderBadge}
           </div>
 
-          <div ${showNotes && q.userNote ? `title="📌 ${escapeHtml(q.userNote)}"` : ''} class="text-base font-black leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm relative group cursor-pointer">
+          <div ${showNotes && q.userNote ? `title="📌 ${escapeHtml(q.userNote)}"` : ''} class="text-base font-normal leading-relaxed bg-slate-100 dark:bg-black p-5 rounded-xl border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white shadow-sm relative group cursor-pointer">
             ${formattedQuestionContent}
             ${showNotes && q.userNote ? `
               <div class="hidden group-hover:flex absolute left-4 right-4 -bottom-11 z-30 p-2.5 bg-amber-400 dark:bg-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-2xl border border-amber-600 items-center space-x-2 animate-fade-in">
@@ -3621,7 +3771,7 @@ function submitMockTest() {
             ${statusBadge}
           </div>
 
-          <div class="text-sm font-extrabold text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(q.questionText)}</div>
+          <div class="text-sm font-normal text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(q.questionText)}</div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs font-bold pt-1">
             <div class="p-2.5 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-950">
@@ -3759,7 +3909,7 @@ function filterReviewModalQuestions(filterType) {
             <span class="w-6 h-6 rounded-lg bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-200 font-black flex items-center justify-center text-xs">
               ${String.fromCharCode(65 + oIdx)}
             </span>
-            <span class="font-extrabold">${formatSubSupScripts(escapeHtml(opt))}</span>
+            <span class="font-normal">${formatSubSupScripts(escapeHtml(opt))}</span>
           </div>
           ${badge}
         </div>
@@ -3781,7 +3931,7 @@ function filterReviewModalQuestions(filterType) {
           ${statusBadge}
         </div>
 
-        <div class="text-sm font-black text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap">${renderFormattedQuestionHTML(q.questionText)}</div>
+        <div class="text-sm font-normal text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap">${renderFormattedQuestionHTML(q.questionText)}</div>
 
           <div id="note-box-${q.id}" class="${q.userNote ? '' : 'hidden'} p-3.5 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-500/30 space-y-2 shadow-inner">
             <div class="flex items-center justify-between text-xs font-black text-amber-800 dark:text-amber-300">
@@ -4478,7 +4628,7 @@ function renderParsedPreview() {
             <textarea rows="2" oninput="parsedPdfQuestions[${idx}].questionText = this.value" class="w-full p-2.5 bg-white dark:bg-black border border-indigo-500/50 rounded-xl text-xs font-bold text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500">${escapeHtml(q.questionText || '')}</textarea>
           </div>
         ` : `
-          <p class="text-sm font-extrabold text-slate-900 dark:text-white">${renderFormattedQuestionHTML(q.questionText)}</p>
+          <p class="text-sm font-normal text-slate-900 dark:text-white leading-relaxed">${renderFormattedQuestionHTML(q.questionText)}</p>
         `}
 
         <!-- Options Grid: Click Any Option Directly to Set Correct Answer! -->
@@ -4522,7 +4672,7 @@ function renderParsedPreview() {
                       <span class="w-6 h-6 rounded-lg ${isSelectedCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 dark:bg-zinc-800 text-slate-900 dark:text-slate-200 group-hover:bg-indigo-600 group-hover:text-white'} font-black flex items-center justify-center text-xs shrink-0 transition">
                         ${String.fromCharCode(65 + oIdx)}
                       </span>
-                      <span class="font-extrabold">${formatSubSupScripts(escapeHtml(opt))}</span>
+                      <span class="font-normal">${formatSubSupScripts(escapeHtml(opt))}</span>
                     </div>
                     ${isSelectedCorrect ? `<span class="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-xs">✓ Correct Answer</span>` : `<span class="text-[10px] text-slate-400 font-extrabold opacity-0 group-hover:opacity-100 transition">Click to Set</span>`}
                   </button>
